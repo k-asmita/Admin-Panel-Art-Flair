@@ -1,0 +1,83 @@
+/* ==============================================================================
+   Art Flair - Sabahz Trading | Design Tokens & CSS Variables
+   Fine Art Atelier Design System
+   ============================================================================== */
+
+:root {
+  /* Brand Palette - Curated Atelier Luxury */
+  --admin-terracotta: #c85a32;
+  --admin-terracotta-hover: #b24b25;
+  --admin-terracotta-light: #fbeee9;
+  --admin-terracotta-glow: rgba(200, 90, 50, 0.25);
+
+  --admin-gold: #c59b27;
+  --admin-gold-hover: #b0871d;
+  --admin-gold-light: #fbf6e7;
+  --admin-gold-glow: rgba(197, 155, 39, 0.22);
+
+  --admin-sage: #2d7a4f;
+  --admin-sage-hover: #23633f;
+  --admin-sage-light: #eaf5ef;
+  --admin-sage-glow: rgba(45, 122, 79, 0.2);
+
+  --admin-red: #d32f2f;
+  --admin-red-hover: #b71c1c;
+  --admin-red-light: #fde8e8;
+  --admin-red-glow: rgba(211, 47, 47, 0.2);
+
+  --admin-info: #2b6cb0;
+  --admin-info-light: #ebf4ff;
+
+  /* Surfaces & Backgrounds */
+  --admin-bg: #f8f6f0;
+  --admin-bg-alt: #f1ede4;
+  --admin-card-bg: #ffffff;
+  --admin-card-bg-subtle: #faf8f5;
+  --admin-sidebar-bg: #1c1424;
+  --admin-sidebar-hover: #2a1f36;
+  --admin-sidebar-active: #352644;
+  --admin-sidebar-border: #2e223b;
+  --admin-sidebar-text: #d8cfe2;
+  --admin-sidebar-text-muted: #8e7f9c;
+  --admin-sidebar-text-active: #ffffff;
+
+  /* Typography Colors */
+  --admin-text: #1f1924;
+  --admin-text-secondary: #6c6275;
+  --admin-text-muted: #958b9e;
+  --admin-text-inverse: #ffffff;
+
+  /* Borders & Dividers */
+  --admin-border: #e6dfd5;
+  --admin-border-light: #f0ebe2;
+  --admin-border-focus: #c85a32;
+
+  /* Radii */
+  --admin-radius-xs: 4px;
+  --admin-radius-sm: 8px;
+  --admin-radius-md: 12px;
+  --admin-radius-lg: 18px;
+  --admin-radius-xl: 24px;
+  --admin-radius-pill: 9999px;
+
+  /* Shadows */
+  --admin-shadow-sm: 0 1px 3px rgba(31, 25, 36, 0.05), 0 1px 2px rgba(31, 25, 36, 0.03);
+  --admin-shadow-md: 0 4px 14px rgba(31, 25, 36, 0.06), 0 2px 6px rgba(31, 25, 36, 0.04);
+  --admin-shadow-lg: 0 12px 28px rgba(31, 25, 36, 0.09), 0 4px 12px rgba(31, 25, 36, 0.05);
+  --admin-shadow-xl: 0 24px 48px rgba(31, 25, 36, 0.14), 0 8px 18px rgba(31, 25, 36, 0.06);
+  --admin-shadow-modal: 0 30px 60px -12px rgba(28, 20, 36, 0.35), 0 18px 36px -18px rgba(0, 0, 0, 0.2);
+
+  /* Fonts */
+  --admin-font-body: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --admin-font-heading: 'Cinzel', 'Plus Jakarta Sans', Georgia, serif;
+  --admin-font-mono: 'JetBrains Mono', 'SF Mono', Consolas, Menlo, monospace;
+
+  /* Transitions */
+  --admin-transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  --admin-transition-base: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  --admin-transition-smooth: 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Layout Dimensions */
+  --admin-sidebar-width: 260px;
+  --admin-header-height: 72px;
+}
