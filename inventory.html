@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Inventory Management | Art Flair Admin</title>
+  
+  <link rel="stylesheet" href="../css/variables.css" />
+  <link rel="stylesheet" href="../css/base.css" />
+  <link rel="stylesheet" href="../css/admin.css" />
+</head>
+<body class="admin-body">
+
+  <div id="admin-sidebar-container"></div>
+
+  <main class="admin-main">
+    <header class="admin-header">
+      <div class="admin-header-left">
+        <h1 class="admin-page-title">Stock Levels & Atelier Inventory</h1>
+      </div>
+      <div class="admin-header-right">
+        <button type="button" class="btn-admin btn-admin-secondary" id="btn-refresh-inventory">
+          ↻ Refresh Stock Levels
+        </button>
+      </div>
+    </header>
+
+    <div class="admin-content-area">
+      <!-- Inventory Overview Summary Cards -->
+      <div class="admin-stats-grid" id="inventory-summary-cards">
+        <div class="admin-stat-card">
+          <div class="admin-stat-header">
+            <span class="admin-stat-label">Total SKUs Tracked</span>
+            <div class="admin-stat-icon icon-terracotta">📦</div>
+          </div>
+          <div class="admin-stat-value" id="stat-total-skus">-</div>
+          <div class="admin-stat-subtext">Active database materials</div>
+        </div>
+
+        <div class="admin-stat-card">
+          <div class="admin-stat-header">
+            <span class="admin-stat-label">Healthy Stock</span>
+            <div class="admin-stat-icon icon-sage">✓</div>
+          </div>
+          <div class="admin-stat-value" id="stat-healthy-stock" style="color: var(--admin-sage);">-</div>
+          <div class="admin-stat-subtext">> 10 units available</div>
+        </div>
+
+        <div class="admin-stat-card">
+          <div class="admin-stat-header">
+            <span class="admin-stat-label">Low Stock Warnings</span>
+            <div class="admin-stat-icon icon-gold">⚠️</div>
+          </div>
+          <div class="admin-stat-value" id="stat-low-stock" style="color: #B38600;">-</div>
+          <div class="admin-stat-subtext">1 to 10 units remaining</div>
+        </div>
+
+        <div class="admin-stat-card">
+          <div class="admin-stat-header">
+            <span class="admin-stat-label">Depleted / Out of Stock</span>
+            <div class="admin-stat-icon icon-red">✕</div>
+          </div>
+          <div class="admin-stat-value" id="stat-out-of-stock" style="color: var(--admin-red);">-</div>
+          <div class="admin-stat-subtext">0 units in warehouse</div>
+        </div>
+      </div>
+
+      <!-- Inventory Table Card -->
+      <div class="admin-card">
+        <div class="admin-card-header">
+          <h2 class="admin-card-title">Live Atelier Inventory Table</h2>
+          
+          <div style="display: flex; gap: 12px; align-items: center;">
+            <select id="inventory-filter-status" class="admin-form-control" style="width: 170px; padding: 6px 12px; font-size: 0.82rem;" aria-label="Filter by stock status">
+              <option value="all">All Stock Statuses</option>
+              <option value="low">Low Stock Only (≤ 10)</option>
+              <option value="out">Out of Stock (0)</option>
+              <option value="instock">Adequately Stocked</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="admin-card-body" style="padding: 0;">
+          <div class="admin-table-container">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Product & SKU</th>
+                  <th>Category</th>
+                  <th>Unit Price (INR)</th>
+                  <th>Current Stock</th>
+                  <th>Stock Status</th>
+                  <th>Direct Backend Update</th>
+                </tr>
+              </thead>
+              <tbody id="inventory-tbody">
+                <tr>
+                  <td colspan="6" style="text-align: center; padding: 32px;">
+                    Loading stock records from backend...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="../js/config.js"></script>
+  <script src="../js/storage.js"></script>
+  <script src="../js/api.js"></script>
+  <script src="../js/admin-common.js"></script>
+  <script>
+    let inventoryItems = [];
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      AdminLayout.render('inventory');
+      bindEvents();
+      await fetchInventory();
+    });
+
+    function bindEvents() {
+      document.getElementById('btn-refresh-inventory')?.addEventListener('click', fetchInventory);
+      document.getElementById('inventory-filter-status')?.addEventListener('change', renderTable);
+    }
+
+    async function fetchInventory() {
+      const tbody = document.getElementById('inventory-tbody');
+      try {
+        const res = await ApiClient.get(API_CONFIG.ENDPOINTS.ADMIN_INVENTORY);
+        if (res && res.success) {
+          inventoryItems = res.inventory || [];
+          updateSummaryMetrics();
+          renderTable();
+        }
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="6" style="color: var(--admin-red); text-align: center; padding: 24px;">Failed to load inventory: ${err.message}</td></tr>`;
+      }
+    }
+
+    function updateSummaryMetrics() {
+      const total = inventoryItems.length;
+      const healthy = inventoryItems.filter(i => i.stock > 10).length;
+      const low = inventoryItems.filter(i => i.stock > 0 && i.stock <= 10).length;
+      const out = inventoryItems.filter(i => i.stock === 0).length;
+
+      document.getElementById('stat-total-skus').textContent = total;
+      document.getElementById('stat-healthy-stock').textContent = healthy;
+      document.getElementById('stat-low-stock').textContent = low;
+      document.getElementById('stat-out-of-stock').textContent = out;
+    }
+
+    function renderTable() {
+      const filter = document.getElementById('inventory-filter-status')?.value || 'all';
+      const tbody = document.getElementById('inventory-tbody');
+
+      let list = [...inventoryItems];
+      if (filter === 'low') list = list.filter(i => i.stock > 0 && i.stock <= 10);
+      else if (filter === 'out') list = list.filter(i => i.stock === 0);
+      else if (filter === 'instock') list = list.filter(i => i.stock > 10);
+
+      if (list.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 32px;">No inventory items match the selected criteria.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = list.map(item => {
+        let badgeClass = 'admin-badge-success';
+        if (item.stock === 0) badgeClass = 'admin-badge-danger';
+        else if (item.stock <= 10) badgeClass = 'admin-badge-warning';
+
+        return `
+          <tr>
+            <td>
+              <div class="admin-table-product-cell">
+                <img src="${item.image || `../Products/${item.category || 'Accessories'}/${(item.image ? item.image.split('/').pop() : 'clay-tools.webp')}`}" alt="${item.name}" class="admin-table-thumbnail" onerror="this.onerror=null; this.src='../Products/Accessories/clay-tools.webp';" />
+                <div>
+                  <strong style="font-size: 0.88rem;">${item.name}</strong>
+                  <div style="font-size: 0.72rem; color: var(--admin-text-secondary); font-family: monospace;">SKU: ${item.id}</div>
+                </div>
+              </div>
+            </td>
+            <td>${item.category}</td>
+            <td><strong>₹${Number(item.price).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></td>
+            <td>
+              <strong style="font-size: 1.1rem; color: ${item.stock <= 10 ? (item.stock === 0 ? 'var(--admin-red)' : '#B38600') : 'var(--admin-text)'};" id="stock-val-${item.id}">
+                ${item.stock}
+              </strong>
+              <span style="font-size: 0.75rem; color: var(--admin-text-secondary);">units</span>
+            </td>
+            <td>
+              <span class="admin-badge ${badgeClass}" id="stock-badge-${item.id}">
+                ${item.status}
+              </span>
+            </td>
+            <td>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <input 
+                  type="number" 
+                  min="0" 
+                  id="input-stock-${item.id}" 
+                  class="admin-form-control" 
+                  style="width: 80px; padding: 4px 8px; text-align: center;" 
+                  value="${item.stock}" 
+                />
+                <button 
+                  type="button" 
+                  class="btn-admin btn-admin-primary btn-admin-sm"
+                  onclick="updateStock('${item.id}')"
+                  id="btn-update-${item.id}"
+                >
+                  Save Stock
+                </button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    window.updateStock = async function(id) {
+      const input = document.getElementById(`input-stock-${id}`);
+      const btn = document.getElementById(`btn-update-${id}`);
+      const newStock = parseInt(input.value, 10);
+
+      if (isNaN(newStock) || newStock < 0) {
+        alert('Please enter a valid non-negative number for stock.');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+
+      try {
+        const res = await ApiClient.put(`/admin/inventory/${id}`, { stock: newStock });
+        if (res && res.success) {
+          // Update local state
+          const item = inventoryItems.find(i => i.id === id);
+          if (item) {
+            item.stock = newStock;
+            item.status = newStock === 0 ? 'Out of Stock' : (newStock <= 10 ? 'Low Stock' : 'In Stock');
+          }
+          updateSummaryMetrics();
+          renderTable();
+          alert(`Stock updated to ${newStock} units in database.`);
+        } else {
+          alert(res?.message || 'Failed to update stock');
+        }
+      } catch (err) {
+        alert('Error updating stock: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Save Stock';
+      }
+    };
+  </script>
+</body>
+</html>

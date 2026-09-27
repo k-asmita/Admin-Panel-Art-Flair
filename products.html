@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Product Catalog Management | Art Flair Admin</title>
+  
+  <link rel="stylesheet" href="../css/variables.css" />
+  <link rel="stylesheet" href="../css/base.css" />
+  <link rel="stylesheet" href="../css/admin.css" />
+</head>
+<body class="admin-body">
+
+  <div id="admin-sidebar-container"></div>
+
+  <main class="admin-main">
+    <header class="admin-header">
+      <div class="admin-header-left">
+        <h1 class="admin-page-title">Catalog & Inventory Products</h1>
+      </div>
+      <div class="admin-header-right">
+        <button type="button" class="btn-admin btn-admin-primary" id="btn-open-add-modal">
+          + Add New Fine Art Product
+        </button>
+      </div>
+    </header>
+
+    <div class="admin-content-area">
+      <!-- Search & Category Filters Bar -->
+      <div class="admin-card" style="margin-bottom: 20px;">
+        <div class="admin-card-body" style="padding: 16px 24px;">
+          <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 240px;">
+              <input 
+                type="text" 
+                id="admin-product-search" 
+                class="admin-form-control" 
+                placeholder="Search products by SKU, name, or artisan brand..." 
+              />
+            </div>
+
+            <div style="width: 220px;">
+              <select id="admin-category-filter" class="admin-form-control" aria-label="Filter by category">
+                <option value="all">All 10 Categories</option>
+                <option value="Accessories">Accessories</option>
+                <option value="Brushes">Brushes</option>
+                <option value="Calligraphy">Calligraphy</option>
+                <option value="Canvas">Canvas</option>
+                <option value="Drawing Media">Drawing Media</option>
+                <option value="Easels">Easels</option>
+                <option value="Painting Medium">Painting Medium</option>
+                <option value="Paints">Paints</option>
+                <option value="Paper & Pads">Paper & Pads</option>
+                <option value="Pen & Markers">Pen & Markers</option>
+              </select>
+            </div>
+
+            <button type="button" class="btn-admin btn-admin-secondary" id="btn-refresh-products">
+              ↻ Refresh
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Products Table Card -->
+      <div class="admin-card">
+        <div class="admin-card-header">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <h2 class="admin-card-title">Archival Catalog Items</h2>
+            <span class="admin-badge admin-badge-info" id="admin-products-count">Loading...</span>
+          </div>
+        </div>
+        <div class="admin-card-body" style="padding: 0;">
+          <div class="admin-table-container">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Product & SKU</th>
+                  <th>Category</th>
+                  <th>Brand</th>
+                  <th>Price (INR)</th>
+                  <th>Stock</th>
+                  <th>Rating</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="admin-products-tbody">
+                <tr>
+                  <td colspan="7" style="text-align: center; padding: 32px; color: var(--admin-text-secondary);">
+                    Loading inventory catalog from database...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Add / Edit Product Modal -->
+  <div class="admin-modal-backdrop" id="product-modal-backdrop">
+    <div class="admin-modal">
+      <div class="admin-modal-header">
+        <h3 class="admin-modal-title" id="product-modal-title">Add Fine Art Product</h3>
+        <button type="button" class="btn-admin btn-admin-secondary btn-admin-sm" id="btn-close-product-modal">✕</button>
+      </div>
+      <form id="product-form">
+        <div class="admin-modal-body">
+          <input type="hidden" id="form-product-id" />
+
+          <div class="admin-form-group">
+            <label class="admin-form-label" for="form-name">Product Name *</label>
+            <input type="text" id="form-name" class="admin-form-control" placeholder="e.g. Winsor & Newton Artists' Oil Colour Set" required />
+          </div>
+
+          <div class="admin-grid-2">
+            <div class="admin-form-group">
+              <label class="admin-form-label" for="form-category">Category *</label>
+              <select id="form-category" class="admin-form-control" required>
+                <option value="Accessories">Accessories</option>
+                <option value="Brushes">Brushes</option>
+                <option value="Calligraphy">Calligraphy</option>
+                <option value="Canvas">Canvas</option>
+                <option value="Drawing Media">Drawing Media</option>
+                <option value="Easels">Easels</option>
+                <option value="Painting Medium">Painting Medium</option>
+                <option value="Paints" selected>Paints</option>
+                <option value="Paper & Pads">Paper & Pads</option>
+                <option value="Pen & Markers">Pen & Markers</option>
+              </select>
+            </div>
+
+            <div class="admin-form-group">
+              <label class="admin-form-label" for="form-brand">Artisan Brand *</label>
+              <input type="text" id="form-brand" class="admin-form-control" placeholder="e.g. Daniel Smith, Golden, Winsor & Newton" required />
+            </div>
+          </div>
+
+          <div class="admin-grid-2">
+            <div class="admin-form-group">
+              <label class="admin-form-label" for="form-price">Price in INR (₹) *</label>
+              <input type="number" id="form-price" class="admin-form-control" step="0.01" min="1" placeholder="2499.00" required />
+            </div>
+
+            <div class="admin-form-group">
+              <label class="admin-form-label" for="form-discount">Discount %</label>
+              <input type="number" id="form-discount" class="admin-form-control" step="1" min="0" max="90" placeholder="0" />
+            </div>
+          </div>
+
+          <div class="admin-grid-2">
+            <div class="admin-form-group">
+              <label class="admin-form-label" for="form-stock">Current Stock Units *</label>
+              <input type="number" id="form-stock" class="admin-form-control" step="1" min="0" placeholder="25" required />
+            </div>
+
+            <div class="admin-form-group">
+              <label class="admin-form-label" for="form-aitag">Curator / AI Highlight Tag</label>
+              <input type="text" id="form-aitag" class="admin-form-control" placeholder="e.g. AI Rare Mineral Pigment" />
+            </div>
+          </div>
+
+          <!-- Product Image Upload / URL Managed via Backend -->
+          <div class="admin-form-group">
+            <label class="admin-form-label">Product Image (Managed via Backend API)</label>
+            <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 8px;">
+              <input type="text" id="form-image" class="admin-form-control" placeholder="Image URL / Backend Storage Path" />
+              <label class="btn-admin btn-admin-secondary" style="margin-bottom: 0; white-space: nowrap; cursor: pointer;">
+                Browse File
+                <input type="file" id="form-file-upload" accept="image/*" style="display: none;" />
+              </label>
+            </div>
+            <div id="image-upload-status" style="font-size: 0.74rem; color: var(--admin-text-secondary);">
+              Images are uploaded and processed through the Sabahz backend API.
+            </div>
+          </div>
+
+          <div class="admin-form-group" style="margin-bottom: 0;">
+            <label class="admin-form-label" for="form-desc">Product Description</label>
+            <textarea id="form-desc" class="admin-form-control" rows="3" placeholder="Formulated with single high-grade pigments for unsurpassed tinting strength..."></textarea>
+          </div>
+        </div>
+
+        <div class="admin-modal-footer">
+          <button type="button" class="btn-admin btn-admin-secondary" id="btn-cancel-product-modal">Cancel</button>
+          <button type="submit" class="btn-admin btn-admin-primary" id="btn-save-product">Save Product to Database</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Global Application Scripts -->
+  <script src="../js/config.js"></script>
+  <script src="../js/storage.js"></script>
+  <script src="../js/api.js"></script>
+  <script src="../js/admin-common.js"></script>
+  <script>
+    let currentProducts = [];
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      AdminLayout.render('products');
+      bindEvents();
+      await fetchProducts();
+    });
+
+    function bindEvents() {
+      // Search and Filter
+      document.getElementById('admin-product-search')?.addEventListener('input', filterAndRender);
+      document.getElementById('admin-category-filter')?.addEventListener('change', filterAndRender);
+      document.getElementById('btn-refresh-products')?.addEventListener('click', fetchProducts);
+
+      // Open Add Modal
+      document.getElementById('btn-open-add-modal')?.addEventListener('click', () => {
+        openModal(false);
+      });
+
+      // Close Modal
+      document.getElementById('btn-close-product-modal')?.addEventListener('click', closeModal);
+      document.getElementById('btn-cancel-product-modal')?.addEventListener('click', closeModal);
+
+      // File upload handler (Simulates backend upload / FileReader)
+      document.getElementById('form-file-upload')?.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const statusEl = document.getElementById('image-upload-status');
+        statusEl.textContent = 'Uploading to backend storage...';
+
+        const reader = new FileReader();
+        reader.onload = async () => {
+          try {
+            const res = await ApiClient.post(API_CONFIG.ENDPOINTS.ADMIN_UPLOAD_IMAGE, {
+              dataUrl: reader.result,
+              filename: file.name
+            });
+            if (res && res.success) {
+              document.getElementById('form-image').value = res.url;
+              statusEl.textContent = '✓ Uploaded successfully via Backend Storage';
+              statusEl.style.color = 'var(--admin-sage)';
+            }
+          } catch (err) {
+            statusEl.textContent = 'Error uploading image: ' + err.message;
+            statusEl.style.color = 'var(--admin-red)';
+          }
+        };
+        reader.readAsDataURL(file);
+      });
+
+      // Submit Form
+      document.getElementById('product-form')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = document.getElementById('form-product-id').value;
+        const isEdit = !!id;
+
+        const payload = {
+          name: document.getElementById('form-name').value.trim(),
+          category: document.getElementById('form-category').value,
+          brand: document.getElementById('form-brand').value.trim(),
+          price: parseFloat(document.getElementById('form-price').value),
+          discount: parseFloat(document.getElementById('form-discount').value) || 0,
+          stock: parseInt(document.getElementById('form-stock').value, 10) || 0,
+          aiTag: document.getElementById('form-aitag').value.trim(),
+          image: document.getElementById('form-image').value.trim() || 'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=600&auto=format&fit=crop&q=80',
+          description: document.getElementById('form-desc').value.trim()
+        };
+
+        const saveBtn = document.getElementById('btn-save-product');
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving to Database...';
+
+        try {
+          let res;
+          if (isEdit) {
+            res = await ApiClient.put(API_CONFIG.ENDPOINTS.ADMIN_PRODUCT_DETAIL(id), payload);
+          } else {
+            res = await ApiClient.post(API_CONFIG.ENDPOINTS.ADMIN_PRODUCTS, payload);
+          }
+
+          if (res && res.success) {
+            alert(isEdit ? 'Product updated successfully.' : 'Product created successfully.');
+            closeModal();
+            await fetchProducts();
+          } else {
+            alert(res?.message || 'Failed to save product.');
+          }
+        } catch (err) {
+          alert('Error: ' + err.message);
+        } finally {
+          saveBtn.disabled = false;
+          saveBtn.textContent = 'Save Product to Database';
+        }
+      });
+    }
+
+    async function fetchProducts() {
+      const tbody = document.getElementById('admin-products-tbody');
+      const countEl = document.getElementById('admin-products-count');
+
+      try {
+        const res = await ApiClient.get(API_CONFIG.ENDPOINTS.ADMIN_PRODUCTS);
+        if (res && res.success) {
+          currentProducts = res.products || [];
+          if (countEl) countEl.textContent = `${currentProducts.length} Supplies`;
+          filterAndRender();
+        }
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="7" style="color: var(--admin-red); text-align: center; padding: 24px;">Failed to load products: ${err.message}</td></tr>`;
+      }
+    }
+
+    function filterAndRender() {
+      const search = (document.getElementById('admin-product-search')?.value || '').toLowerCase().trim();
+      const cat = document.getElementById('admin-category-filter')?.value || 'all';
+      const tbody = document.getElementById('admin-products-tbody');
+
+      let list = [...currentProducts];
+      if (cat !== 'all') {
+        list = list.filter(p => p.category === cat);
+      }
+      if (search) {
+        list = list.filter(p => p.name.toLowerCase().includes(search) || p.brand.toLowerCase().includes(search) || p.id.toLowerCase().includes(search));
+      }
+
+      if (list.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 32px;">No matching materials found.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = list.map(p => `
+        <tr>
+          <td>
+            <div class="admin-table-product-cell">
+              <img src="${p.image || `../Products/${p.category || 'Accessories'}/${(p.image ? p.image.split('/').pop() : 'clay-tools.webp')}`}" alt="${p.name}" class="admin-table-thumbnail" onerror="this.onerror=null; this.src='../Products/Accessories/clay-tools.webp';" />
+              <div>
+                <strong style="font-size: 0.9rem;">${p.name}</strong>
+                <div style="font-size: 0.74rem; color: var(--admin-text-secondary); font-family: monospace;">SKU: ${p.id}</div>
+              </div>
+            </div>
+          </td>
+          <td>${p.category}</td>
+          <td><strong>${p.brand}</strong></td>
+          <td>
+            <strong>₹${Number(p.price).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+            ${p.discount > 0 ? `<div style="font-size: 0.72rem; color: var(--admin-terracotta);">${p.discount}% Off</div>` : ''}
+          </td>
+          <td>
+            <strong style="color: ${p.stock <= 10 ? 'var(--admin-red)' : 'var(--admin-sage)'};">${p.stock}</strong>
+            <span class="admin-badge ${p.stock === 0 ? 'admin-badge-danger' : (p.stock <= 10 ? 'admin-badge-warning' : 'admin-badge-success')}" style="margin-left: 6px;">
+              ${p.stock === 0 ? 'Out' : (p.stock <= 10 ? 'Low' : 'OK')}
+            </span>
+          </td>
+          <td>★ ${p.rating || 5.0}</td>
+          <td>
+            <div style="display: flex; gap: 6px;">
+              <button type="button" class="btn-admin btn-admin-secondary btn-admin-sm" onclick="editProduct('${p.id}')">Edit</button>
+              <button type="button" class="btn-admin btn-admin-danger btn-admin-sm" onclick="deleteProduct('${p.id}', '${p.name.replace(/'/g, "\\'")}')">Delete</button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function openModal(isEdit, product = null) {
+      const modal = document.getElementById('product-modal-backdrop');
+      const title = document.getElementById('product-modal-title');
+      const form = document.getElementById('product-form');
+
+      form.reset();
+      document.getElementById('image-upload-status').textContent = 'Images are uploaded and processed through the Sabahz backend API.';
+      document.getElementById('image-upload-status').style.color = 'var(--admin-text-secondary)';
+
+      if (isEdit && product) {
+        title.textContent = 'Edit Fine Art Product (' + product.id + ')';
+        document.getElementById('form-product-id').value = product.id;
+        document.getElementById('form-name').value = product.name;
+        document.getElementById('form-category').value = product.category;
+        document.getElementById('form-brand').value = product.brand;
+        document.getElementById('form-price').value = product.price;
+        document.getElementById('form-discount').value = product.discount || 0;
+        document.getElementById('form-stock').value = product.stock;
+        document.getElementById('form-aitag').value = product.aiTag || '';
+        document.getElementById('form-image').value = product.image || '';
+        document.getElementById('form-desc').value = product.description || '';
+      } else {
+        title.textContent = 'Add Fine Art Product';
+        document.getElementById('form-product-id').value = '';
+      }
+
+      modal.classList.add('active');
+    }
+
+    function closeModal() {
+      document.getElementById('product-modal-backdrop').classList.remove('active');
+    }
+
+    window.editProduct = function(id) {
+      const prod = currentProducts.find(p => p.id === id);
+      if (prod) openModal(true, prod);
+    };
+
+    window.deleteProduct = async function(id, name) {
+      if (confirm(`Are you sure you want to permanently remove "${name}" (${id}) from the database catalog?`)) {
+        try {
+          const res = await ApiClient.delete(API_CONFIG.ENDPOINTS.ADMIN_PRODUCT_DETAIL(id));
+          if (res && res.success) {
+            alert('Product removed from database.');
+            await fetchProducts();
+          } else {
+            alert(res?.message || 'Failed to delete product.');
+          }
+        } catch (err) {
+          alert('Error: ' + err.message);
+        }
+      }
+    };
+  </script>
+</body>
+</html>

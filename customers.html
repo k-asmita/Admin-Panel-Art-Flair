@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Customer Directory | Art Flair Admin</title>
+  
+  <link rel="stylesheet" href="../css/variables.css" />
+  <link rel="stylesheet" href="../css/base.css" />
+  <link rel="stylesheet" href="../css/admin.css" />
+</head>
+<body class="admin-body">
+
+  <div id="admin-sidebar-container"></div>
+
+  <main class="admin-main">
+    <header class="admin-header">
+      <div class="admin-header-left">
+        <h1 class="admin-page-title">Authorized Patron & Atelier Directory</h1>
+      </div>
+      <div class="admin-header-right">
+        <button type="button" class="btn-admin btn-admin-secondary" id="btn-refresh-customers">
+          ↻ Refresh Directory
+        </button>
+      </div>
+    </header>
+
+    <div class="admin-content-area">
+      <!-- Search & Filters -->
+      <div class="admin-card" style="margin-bottom: 20px;">
+        <div class="admin-card-body" style="padding: 16px 24px;">
+          <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 260px;">
+              <input 
+                type="text" 
+                id="admin-customer-search" 
+                class="admin-form-control" 
+                placeholder="Search patrons by name, discipline, email, or city..." 
+              />
+            </div>
+            <div>
+              <span class="admin-badge admin-badge-info" style="font-size: 0.8rem; padding: 8px 14px;">
+                🔒 GDPR & Sensitive Data Sanitized
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Customers Table Card -->
+      <div class="admin-card">
+        <div class="admin-card-header">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <h2 class="admin-card-title">Registered Art Studios & Artists</h2>
+            <span class="admin-badge admin-badge-info" id="admin-customers-count">Loading...</span>
+          </div>
+        </div>
+
+        <div class="admin-card-body" style="padding: 0;">
+          <div class="admin-table-container">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Patron Name & ID</th>
+                  <th>Contact Email</th>
+                  <th>Location</th>
+                  <th>Creative Discipline</th>
+                  <th>Orders Placed</th>
+                  <th>Lifetime Spend (INR)</th>
+                  <th>Member Since</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="admin-customers-tbody">
+                <tr>
+                  <td colspan="8" style="text-align: center; padding: 32px; color: var(--admin-text-secondary);">
+                    Loading registered patrons from backend...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="../js/config.js"></script>
+  <script src="../js/storage.js"></script>
+  <script src="../js/api.js"></script>
+  <script src="../js/admin-common.js"></script>
+  <script>
+    let currentCustomers = [];
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      AdminLayout.render('customers');
+      bindEvents();
+      await fetchCustomers();
+    });
+
+    function bindEvents() {
+      document.getElementById('btn-refresh-customers')?.addEventListener('click', fetchCustomers);
+      document.getElementById('admin-customer-search')?.addEventListener('input', filterAndRender);
+    }
+
+    async function fetchCustomers() {
+      const tbody = document.getElementById('admin-customers-tbody');
+      const countEl = document.getElementById('admin-customers-count');
+
+      try {
+        const res = await ApiClient.get(API_CONFIG.ENDPOINTS.ADMIN_CUSTOMERS);
+        if (res && res.success) {
+          currentCustomers = res.customers || [];
+          if (countEl) countEl.textContent = `${currentCustomers.length} Patrons`;
+          filterAndRender();
+        }
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="8" style="color: var(--admin-red); text-align: center; padding: 24px;">Failed to load customers: ${err.message}</td></tr>`;
+      }
+    }
+
+    function filterAndRender() {
+      const search = (document.getElementById('admin-customer-search')?.value || '').toLowerCase().trim();
+      const tbody = document.getElementById('admin-customers-tbody');
+
+      let list = [...currentCustomers];
+      if (search) {
+        list = list.filter(c => 
+          c.name.toLowerCase().includes(search) ||
+          c.email.toLowerCase().includes(search) ||
+          c.discipline.toLowerCase().includes(search) ||
+          c.city.toLowerCase().includes(search) ||
+          c.id.toLowerCase().includes(search)
+        );
+      }
+
+      if (list.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 32px;">No matching patrons found.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = list.map(c => `
+        <tr>
+          <td>
+            <div><strong>${c.name}</strong></div>
+            <div style="font-size: 0.72rem; color: var(--admin-text-secondary); font-family: monospace;">${c.id}</div>
+          </td>
+          <td>
+            <div>${c.email}</div>
+            <div style="font-size: 0.72rem; color: var(--admin-text-secondary);">${c.phone || ''}</div>
+          </td>
+          <td>${c.city}, ${c.state}</td>
+          <td><span class="admin-badge admin-badge-info">${c.discipline}</span></td>
+          <td><strong>${c.ordersCount || 1}</strong> orders</td>
+          <td><strong>₹${Number(c.totalSpent || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></td>
+          <td>${new Date(c.joinedDate).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}</td>
+          <td><span class="admin-badge admin-badge-success">${c.status || 'Active Atelier'}</span></td>
+        </tr>
+      `).join('');
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Orders Management | Art Flair Admin</title>
+  
+  <link rel="stylesheet" href="../css/variables.css" />
+  <link rel="stylesheet" href="../css/base.css" />
+  <link rel="stylesheet" href="../css/admin.css" />
+</head>
+<body class="admin-body">
+
+  <div id="admin-sidebar-container"></div>
+
+  <main class="admin-main">
+    <header class="admin-header">
+      <div class="admin-header-left">
+        <h1 class="admin-page-title">Patron Orders & Logistics Fulfillment</h1>
+      </div>
+      <div class="admin-header-right">
+        <button type="button" class="btn-admin btn-admin-secondary" id="btn-refresh-orders">
+          ↻ Refresh Orders
+        </button>
+      </div>
+    </header>
+
+    <div class="admin-content-area">
+      <!-- Orders Filter Bar -->
+      <div class="admin-card" style="margin-bottom: 20px;">
+        <div class="admin-card-body" style="padding: 16px 24px;">
+          <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 240px;">
+              <input 
+                type="text" 
+                id="admin-order-search" 
+                class="admin-form-control" 
+                placeholder="Search by Order ID, customer name, email, or city..." 
+              />
+            </div>
+
+            <div style="width: 200px;">
+              <select id="admin-order-status-filter" class="admin-form-control" aria-label="Filter orders by status">
+                <option value="all">All Order Statuses</option>
+                <option value="Confirmed">Confirmed</option>
+                <option value="Processing">Processing</option>
+                <option value="Shipped">Shipped</option>
+                <option value="Delivered">Delivered</option>
+                <option value="Cancelled">Cancelled</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Orders Table -->
+      <div class="admin-card">
+        <div class="admin-card-header">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <h2 class="admin-card-title">Database Customer Orders</h2>
+            <span class="admin-badge admin-badge-info" id="admin-orders-count">Loading...</span>
+          </div>
+        </div>
+
+        <div class="admin-card-body" style="padding: 0;">
+          <div class="admin-table-container">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Order Reference</th>
+                  <th>Patron / Atelier</th>
+                  <th>Order Date</th>
+                  <th>Materials</th>
+                  <th>Total (INR)</th>
+                  <th>Payment</th>
+                  <th>Fulfillment Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="admin-orders-tbody">
+                <tr>
+                  <td colspan="8" style="text-align: center; padding: 32px; color: var(--admin-text-secondary);">
+                    Loading order records from backend...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Status Update / Order Details Modal -->
+  <div class="admin-modal-backdrop" id="order-modal-backdrop">
+    <div class="admin-modal" style="max-width: 650px;">
+      <div class="admin-modal-header">
+        <h3 class="admin-modal-title" id="order-modal-title">Manage Order Details</h3>
+        <button type="button" class="btn-admin btn-admin-secondary btn-admin-sm" id="btn-close-order-modal">✕</button>
+      </div>
+      <div class="admin-modal-body" id="order-modal-content">
+        <!-- Injected via JavaScript -->
+      </div>
+      <div class="admin-modal-footer">
+        <button type="button" class="btn-admin btn-admin-secondary" id="btn-dismiss-order-modal">Close</button>
+        <button type="button" class="btn-admin btn-admin-primary" id="btn-save-order-status">Save Status Update</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="../js/config.js"></script>
+  <script src="../js/storage.js"></script>
+  <script src="../js/api.js"></script>
+  <script src="../js/admin-common.js"></script>
+  <script>
+    let currentOrders = [];
+    let selectedOrder = null;
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      AdminLayout.render('orders');
+      bindEvents();
+      await fetchOrders();
+    });
+
+    function bindEvents() {
+      document.getElementById('btn-refresh-orders')?.addEventListener('click', fetchOrders);
+      document.getElementById('admin-order-search')?.addEventListener('input', filterAndRender);
+      document.getElementById('admin-order-status-filter')?.addEventListener('change', filterAndRender);
+
+      document.getElementById('btn-close-order-modal')?.addEventListener('click', closeModal);
+      document.getElementById('btn-dismiss-order-modal')?.addEventListener('click', closeModal);
+
+      document.getElementById('btn-save-order-status')?.addEventListener('click', async () => {
+        if (!selectedOrder) return;
+        const newStatus = document.getElementById('modal-status-select')?.value;
+        const saveBtn = document.getElementById('btn-save-order-status');
+
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Updating...';
+
+        try {
+          const res = await ApiClient.put(`/admin/orders/${selectedOrder.orderId}/status`, { status: newStatus });
+          if (res && res.success) {
+            selectedOrder.status = newStatus;
+            alert(`Order ${selectedOrder.orderId} updated to ${newStatus}.`);
+            closeModal();
+            await fetchOrders();
+          } else {
+            alert(res?.message || 'Failed to update order status');
+          }
+        } catch (err) {
+          alert('Error: ' + err.message);
+        } finally {
+          saveBtn.disabled = false;
+          saveBtn.textContent = 'Save Status Update';
+        }
+      });
+    }
+
+    async function fetchOrders() {
+      const tbody = document.getElementById('admin-orders-tbody');
+      const countEl = document.getElementById('admin-orders-count');
+
+      try {
+        const res = await ApiClient.get(API_CONFIG.ENDPOINTS.ADMIN_ORDERS);
+        if (res && res.success) {
+          currentOrders = res.orders || [];
+          if (countEl) countEl.textContent = `${currentOrders.length} Orders`;
+          filterAndRender();
+        }
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="8" style="color: var(--admin-red); text-align: center; padding: 24px;">Failed to load orders: ${err.message}</td></tr>`;
+      }
+    }
+
+    function filterAndRender() {
+      const search = (document.getElementById('admin-order-search')?.value || '').toLowerCase().trim();
+      const statusFilter = document.getElementById('admin-order-status-filter')?.value || 'all';
+      const tbody = document.getElementById('admin-orders-tbody');
+
+      let list = [...currentOrders];
+      if (statusFilter !== 'all') {
+        list = list.filter(o => o.status === statusFilter);
+      }
+      if (search) {
+        list = list.filter(o => 
+          o.orderId.toLowerCase().includes(search) ||
+          (o.customer?.firstName && o.customer.firstName.toLowerCase().includes(search)) ||
+          (o.customer?.lastName && o.customer.lastName.toLowerCase().includes(search)) ||
+          (o.customer?.email && o.customer.email.toLowerCase().includes(search)) ||
+          (o.shippingAddress?.city && o.shippingAddress.city.toLowerCase().includes(search))
+        );
+      }
+
+      if (list.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 32px;">No matching orders found.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = list.map(o => {
+        let badgeClass = 'admin-badge-info';
+        if (o.status === 'Delivered') badgeClass = 'admin-badge-success';
+        else if (o.status === 'Shipped') badgeClass = 'admin-badge-warning';
+        else if (o.status === 'Cancelled') badgeClass = 'admin-badge-danger';
+
+        const customerName = `${o.customer?.firstName || 'Artist'} ${o.customer?.lastName || ''}`;
+
+        return `
+          <tr>
+            <td><strong style="font-family: monospace;">${o.orderId}</strong></td>
+            <td>
+              <div><strong>${customerName}</strong></div>
+              <div style="font-size: 0.74rem; color: var(--admin-text-secondary);">${o.shippingAddress?.city || 'India'} • ${o.customer?.phone || ''}</div>
+            </td>
+            <td>${new Date(o.orderDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
+            <td>${o.items?.length || 0} unique items</td>
+            <td><strong>₹${Number(o.total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></td>
+            <td>
+              <span class="admin-badge admin-badge-success" style="font-size: 0.7rem;">${o.paymentStatus || 'Paid'}</span>
+              <div style="font-size: 0.72rem; color: var(--admin-text-secondary); margin-top: 2px;">${o.paymentMethod || 'UPI'}</div>
+            </td>
+            <td>
+              <span class="admin-badge ${badgeClass}">${o.status}</span>
+            </td>
+            <td>
+              <button type="button" class="btn-admin btn-admin-secondary btn-admin-sm" onclick="viewOrderDetails('${o.orderId}')">
+                Update Status
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    window.viewOrderDetails = function(orderId) {
+      selectedOrder = currentOrders.find(o => o.orderId === orderId);
+      if (!selectedOrder) return;
+
+      const modal = document.getElementById('order-modal-backdrop');
+      const title = document.getElementById('order-modal-title');
+      const content = document.getElementById('order-modal-content');
+
+      title.textContent = `Order ${selectedOrder.orderId} — Atelier Dispatch`;
+
+      const customerName = `${selectedOrder.customer?.firstName || 'Artist'} ${selectedOrder.customer?.lastName || ''}`;
+
+      content.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 14px; border-bottom: 1px solid var(--admin-border);">
+          <div>
+            <div style="font-size: 0.78rem; color: var(--admin-text-secondary);">Customer Atelier</div>
+            <strong>${customerName}</strong> (${selectedOrder.customer?.email || ''})
+            <div style="font-size: 0.78rem; color: var(--admin-text-secondary);">${selectedOrder.shippingAddress?.address || ''}, ${selectedOrder.shippingAddress?.city || ''} - ${selectedOrder.shippingAddress?.postalCode || ''}</div>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-size: 0.78rem; color: var(--admin-text-secondary);">Total Investment</div>
+            <strong style="font-size: 1.3rem; color: var(--admin-text);">₹${Number(selectedOrder.total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+          </div>
+        </div>
+
+        <div class="admin-form-group" style="background: var(--admin-bg); padding: 16px; border-radius: var(--admin-radius-md); border: 1px solid var(--admin-border);">
+          <label class="admin-form-label" for="modal-status-select">Update Fulfillment & Dispatch Status</label>
+          <select id="modal-status-select" class="admin-form-control">
+            <option value="Confirmed" ${selectedOrder.status === 'Confirmed' ? 'selected' : ''}>Confirmed</option>
+            <option value="Processing" ${selectedOrder.status === 'Processing' ? 'selected' : ''}>Processing</option>
+            <option value="Shipped" ${selectedOrder.status === 'Shipped' ? 'selected' : ''}>Shipped</option>
+            <option value="Delivered" ${selectedOrder.status === 'Delivered' ? 'selected' : ''}>Delivered</option>
+            <option value="Cancelled" ${selectedOrder.status === 'Cancelled' ? 'selected' : ''}>Cancelled</option>
+          </select>
+        </div>
+
+        <h4 style="font-size: 0.95rem; margin-bottom: 10px;">Ordered Materials:</h4>
+        <div style="display: flex; flex-direction: column; gap: 8px; max-height: 180px; overflow-y: auto;">
+          ${(selectedOrder.items || []).map(item => `
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: #FFFDF9; border: 1px solid var(--admin-border-light); border-radius: 6px;">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <img src="${item.image || `../Products/${item.category || 'Accessories'}/${(item.image ? item.image.split('/').pop() : 'clay-tools.webp')}`}" style="width: 32px; height: 32px; border-radius: 4px; object-fit: cover;" onerror="this.onerror=null; this.src='../Products/Accessories/clay-tools.webp';" />
+                <span style="font-size: 0.85rem; font-weight: 600;">${item.name}</span>
+              </div>
+              <span style="font-size: 0.85rem; color: var(--admin-text-secondary);">Qty: ${item.quantity} × ₹${Number(item.price).toLocaleString('en-IN')}</span>
+            </div>
+          `).join('')}
+        </div>
+      `;
+
+      modal.classList.add('active');
+    };
+
+    function closeModal() {
+      document.getElementById('order-modal-backdrop').classList.remove('active');
+      selectedOrder = null;
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Dashboard | Art Flair - Sabahz Trading</title>
+  
+  <!-- CSS Stylesheets -->
+  <link rel="stylesheet" href="../css/variables.css" />
+  <link rel="stylesheet" href="../css/base.css" />
+  <link rel="stylesheet" href="../css/admin.css" />
+</head>
+<body class="admin-body">
+
+  <!-- Sidebar Component Container -->
+  <div id="admin-sidebar-container"></div>
+
+  <!-- Main Content Layout -->
+  <main class="admin-main">
+    <!-- Header -->
+    <header class="admin-header">
+      <div class="admin-header-left">
+        <h1 class="admin-page-title">Executive Atelier Dashboard</h1>
+      </div>
+      <div class="admin-header-right">
+        <span class="admin-badge admin-badge-success">● Database Connected (INR)</span>
+        <a href="products.html" class="btn-admin btn-admin-primary">+ Add New Medium</a>
+      </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <div class="admin-content-area">
+      <!-- Dynamic Metric Cards (Loaded from Backend /admin/stats) -->
+      <div class="admin-stats-grid" id="admin-metrics-container">
+        <div class="skeleton" style="height: 140px; border-radius: 14px;"></div>
+        <div class="skeleton" style="height: 140px; border-radius: 14px;"></div>
+        <div class="skeleton" style="height: 140px; border-radius: 14px;"></div>
+        <div class="skeleton" style="height: 140px; border-radius: 14px;"></div>
+      </div>
+
+      <!-- Quick Action / Alerts Row -->
+      <div class="admin-grid-2" style="margin-bottom: 28px;">
+        <!-- Low Stock Alerts Panel -->
+        <div class="admin-card" style="margin-bottom: 0;">
+          <div class="admin-card-header">
+            <h2 class="admin-card-title">⚠️ Low Stock Material Alerts</h2>
+            <a href="inventory.html" class="btn-admin btn-admin-secondary btn-admin-sm">Manage Inventory →</a>
+          </div>
+          <div class="admin-card-body" id="dashboard-low-stock-container" style="padding: 0;">
+            <div style="padding: 24px; text-align: center; color: var(--admin-text-secondary);">
+              Loading stock evaluations from database...
+            </div>
+          </div>
+        </div>
+
+        <!-- System & Catalog Health -->
+        <div class="admin-card" style="margin-bottom: 0;">
+          <div class="admin-card-header">
+            <h2 class="admin-card-title">🎨 Atelier Status & System Overview</h2>
+            <span class="admin-badge admin-badge-info">Active Version 2.4</span>
+          </div>
+          <div class="admin-card-body">
+            <div style="display: flex; flex-direction: column; gap: 14px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--admin-border-light);">
+                <span style="font-weight: 600;">Store Currency</span>
+                <strong>Indian Rupees (₹ - INR)</strong>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--admin-border-light);">
+                <span style="font-weight: 600;">Tax Engine Rate</span>
+                <strong>12% GST on Fine Art Supplies</strong>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--admin-border-light);">
+                <span style="font-weight: 600;">Free Shipping Threshold</span>
+                <strong style="color: var(--admin-sage);">Orders ₹1,499.00 and above</strong>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-weight: 600;">AI Recommendation Server</span>
+                <span class="admin-badge admin-badge-success">Operational & Scoring</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Customer Orders Table (Dynamic from Backend) -->
+      <div class="admin-card">
+        <div class="admin-card-header">
+          <h2 class="admin-card-title">📦 Recent Studio Orders & Dispatch Status</h2>
+          <a href="orders.html" class="btn-admin btn-admin-secondary btn-admin-sm">View All Orders →</a>
+        </div>
+        <div class="admin-card-body" style="padding: 0;">
+          <div class="admin-table-container">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Order Reference</th>
+                  <th>Customer Atelier</th>
+                  <th>Date</th>
+                  <th>Items</th>
+                  <th>Total (INR)</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="dashboard-recent-orders-tbody">
+                <tr>
+                  <td colspan="7" style="text-align: center; padding: 24px; color: var(--admin-text-secondary);">
+                    Loading recent orders from backend...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Global Application Scripts -->
+  <script src="../js/config.js"></script>
+  <script src="../js/storage.js"></script>
+  <script src="../js/api.js"></script>
+  <script src="../js/admin-common.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      AdminLayout.render('dashboard');
+      await loadDashboardData();
+    });
+
+    async function loadDashboardData() {
+      const metricsContainer = document.getElementById('admin-metrics-container');
+      const lowStockContainer = document.getElementById('dashboard-low-stock-container');
+      const ordersTbody = document.getElementById('dashboard-recent-orders-tbody');
+
+      try {
+        const res = await ApiClient.get(API_CONFIG.ENDPOINTS.ADMIN_STATS);
+        if (!res || !res.success || !res.stats) {
+          throw new Error('Failed to retrieve statistics from backend');
+        }
+
+        const stats = res.stats;
+
+        // 1. Metric Cards
+        metricsContainer.innerHTML = `
+          <div class="admin-stat-card">
+            <div class="admin-stat-header">
+              <span class="admin-stat-label">Total Revenue</span>
+              <div class="admin-stat-icon icon-terracotta">₹</div>
+            </div>
+            <div class="admin-stat-value">₹${stats.totalRevenue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+            <div class="admin-stat-subtext">Verified sales volume</div>
+          </div>
+
+          <div class="admin-stat-card">
+            <div class="admin-stat-header">
+              <span class="admin-stat-label">Total Orders</span>
+              <div class="admin-stat-icon icon-sage">📦</div>
+            </div>
+            <div class="admin-stat-value">${stats.totalOrders}</div>
+            <div class="admin-stat-subtext">Dispatched & In-Transit</div>
+          </div>
+
+          <div class="admin-stat-card">
+            <div class="admin-stat-header">
+              <span class="admin-stat-label">Active Patrons</span>
+              <div class="admin-stat-icon icon-gold">👥</div>
+            </div>
+            <div class="admin-stat-value">${stats.totalCustomers}</div>
+            <div class="admin-stat-subtext">Registered art studios</div>
+          </div>
+
+          <div class="admin-stat-card">
+            <div class="admin-stat-header">
+              <span class="admin-stat-label">Catalog Products</span>
+              <div class="admin-stat-icon icon-terracotta">🎨</div>
+            </div>
+            <div class="admin-stat-value">${stats.totalProducts}</div>
+            <div class="admin-stat-subtext">${stats.lowStockCount} low-stock alerts</div>
+          </div>
+        `;
+
+        // 2. Low Stock Alerts List
+        if (!stats.lowStockProducts || stats.lowStockProducts.length === 0) {
+          lowStockContainer.innerHTML = `
+            <div style="padding: 24px; text-align: center; color: var(--admin-sage);">
+              ✓ All fine art materials are adequately stocked.
+            </div>
+          `;
+        } else {
+          lowStockContainer.innerHTML = `
+            <div class="admin-table-container">
+              <table class="admin-table">
+                <thead>
+                  <tr>
+                    <th>Material</th>
+                    <th>Category</th>
+                    <th>Current Stock</th>
+                    <th>Alert</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${stats.lowStockProducts.map(p => `
+                    <tr>
+                      <td>
+                        <div class="admin-table-product-cell">
+                          <img src="${p.image}" alt="${p.name}" class="admin-table-thumbnail" />
+                          <div>
+                            <strong style="font-size: 0.85rem;">${p.name}</strong>
+                            <div style="font-size: 0.72rem; color: var(--admin-text-secondary);">${p.id}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td>${p.category}</td>
+                      <td><strong style="color: ${p.stock === 0 ? 'var(--admin-red)' : '#B38600'};">${p.stock} units</strong></td>
+                      <td>
+                        <span class="admin-badge ${p.stock === 0 ? 'admin-badge-danger' : 'admin-badge-warning'}">
+                          ${p.stock === 0 ? 'Out of Stock' : 'Low Stock'}
+                        </span>
+                      </td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          `;
+        }
+
+        // 3. Recent Orders
+        if (!stats.recentOrders || stats.recentOrders.length === 0) {
+          ordersTbody.innerHTML = `
+            <tr>
+              <td colspan="7" style="text-align: center; padding: 24px;">No studio orders on record.</td>
+            </tr>
+          `;
+        } else {
+          ordersTbody.innerHTML = stats.recentOrders.map(o => {
+            let statusBadge = 'admin-badge-info';
+            if (o.status === 'Delivered') statusBadge = 'admin-badge-success';
+            else if (o.status === 'Shipped') statusBadge = 'admin-badge-warning';
+            else if (o.status === 'Cancelled') statusBadge = 'admin-badge-danger';
+
+            return `
+              <tr>
+                <td><strong>${o.orderId}</strong></td>
+                <td>
+                  <div>${o.customer?.firstName || 'Artist'} ${o.customer?.lastName || ''}</div>
+                  <div style="font-size: 0.72rem; color: var(--admin-text-secondary);">${o.customer?.email || ''}</div>
+                </td>
+                <td>${new Date(o.orderDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
+                <td>${o.items?.length || 0} items</td>
+                <td><strong>₹${Number(o.total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></td>
+                <td><span class="admin-badge ${statusBadge}">${o.status}</span></td>
+                <td>
+                  <a href="orders.html" class="btn-admin btn-admin-secondary btn-admin-sm">Manage</a>
+                </td>
+              </tr>
+            `;
+          }).join('');
+        }
+
+      } catch (err) {
+        console.error(err);
+        metricsContainer.innerHTML = `<div class="admin-card" style="grid-column: 1/-1; padding: 20px; color: var(--admin-red);">Failed to connect to backend statistics API.</div>`;
+      }
+    }
+  </script>
+</body>
+</html>
