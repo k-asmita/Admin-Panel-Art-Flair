@@ -7,11 +7,18 @@ const API_CONFIG = {
   ENDPOINTS: {
     ADMIN_LOGIN: '/admin/login',
     ADMIN_STATS: '/admin/stats',
+    ADMIN_PRODUCTS: '/admin/products',
     PRODUCTS: '/admin/products',
+    ADMIN_PRODUCT_DETAIL: (id) => `/admin/products/${id}`,
+    ADMIN_ORDERS: '/admin/orders',
     ORDERS: '/admin/orders',
+    ADMIN_CUSTOMERS: '/admin/customers',
     CUSTOMERS: '/admin/customers',
+    ADMIN_INVENTORY: '/admin/inventory',
     INVENTORY: '/admin/inventory',
+    ADMIN_ANALYTICS: '/admin/analytics',
     ANALYTICS: '/admin/analytics',
+    ADMIN_UPLOAD_IMAGE: '/admin/upload',
     UPLOAD_IMAGE: '/admin/upload'
   },
   STORAGE_KEYS: {

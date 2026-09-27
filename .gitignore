@@ -1,0 +1,21 @@
+# Environment and Secrets
+.env
+.env.local
+.env.*.local
+
+# Local Databases
+*.db
+*.sqlite
+*.sqlite3
+database/art_flair_local.db
+
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# OS / Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

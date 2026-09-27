@@ -23,7 +23,7 @@
         <h1 class="admin-page-title">Executive Atelier Dashboard</h1>
       </div>
       <div class="admin-header-right">
-        <span class="admin-badge admin-badge-success">● Database Connected (INR)</span>
+        <span class="admin-badge admin-badge-info" id="db-status-badge">● Initializing DB Status...</span>
         <a href="products.html" class="btn-admin btn-admin-primary">+ Add New Medium</a>
       </div>
     </header>
@@ -131,11 +131,22 @@
       const metricsContainer = document.getElementById('admin-metrics-container');
       const lowStockContainer = document.getElementById('dashboard-low-stock-container');
       const ordersTbody = document.getElementById('dashboard-recent-orders-tbody');
+      const dbStatusBadge = document.getElementById('db-status-badge');
 
       try {
         const res = await ApiClient.get(API_CONFIG.ENDPOINTS.ADMIN_STATS);
         if (!res || !res.success || !res.stats) {
           throw new Error('Failed to retrieve statistics from backend');
+        }
+
+        if (dbStatusBadge) {
+          if (res.isLiveDb) {
+            dbStatusBadge.className = 'admin-badge admin-badge-success';
+            dbStatusBadge.textContent = '● Database Connected (INR)';
+          } else {
+            dbStatusBadge.className = 'admin-badge admin-badge-warning';
+            dbStatusBadge.textContent = '○ Database Standby / No Orders Placed';
+          }
         }
 
         const stats = res.stats;
