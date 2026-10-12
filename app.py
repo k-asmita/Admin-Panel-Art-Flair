@@ -1155,6 +1155,48 @@ def serve_uploads(filename):
     return send_from_directory(str(UPLOAD_DIR), filename)
 
 
+@app.route('/products/<path:filename>')
+@app.route('/Products/<path:filename>')
+def serve_product_images(filename):
+    prod_dir = Path(__file__).resolve().parent / 'Products'
+    target = prod_dir / filename
+    if target.exists() and target.is_file():
+        return send_from_directory(str(target.parent), target.name)
+
+    # Handle category slugs with spaces/symbols (e.g. drawing-media -> Drawing Media)
+    parts = filename.replace('\\', '/').split('/')
+    if len(parts) >= 2:
+        cat_slug = parts[0].strip().lower()
+        file_part = '/'.join(parts[1:])
+        category_map = {
+            'accessories': 'Accessories',
+            'brushes': 'Brushes',
+            'calligraphy': 'Calligraphy',
+            'canvas': 'Canvas',
+            'drawing-media': 'Drawing Media',
+            'drawing media': 'Drawing Media',
+            'easels': 'Easels',
+            'hero': 'Hero',
+            'painting-medium': 'Painting Medium',
+            'painting medium': 'Painting Medium',
+            'paints': 'Paints',
+            'paper-pads': 'Paper & Pads',
+            'paper & pads': 'Paper & Pads',
+            'pen-markers': 'Pen & Markers',
+            'pen & markers': 'Pen & Markers',
+        }
+        mapped_folder = category_map.get(cat_slug)
+        if mapped_folder:
+            alt_target = prod_dir / mapped_folder / file_part
+            if alt_target.exists() and alt_target.is_file():
+                return send_from_directory(str(alt_target.parent), alt_target.name)
+
+    placeholder = prod_dir / 'placeholder-art.svg'
+    if placeholder.exists():
+        return send_from_directory(str(prod_dir), 'placeholder-art.svg')
+    return "Image not found", 404
+
+
 @app.route('/', defaults={'path': 'dashboard.html'})
 @app.route('/<path:path>')
 def serve_static(path):
