@@ -20,7 +20,7 @@
       </div>
       <div class="admin-header-right">
         <button type="button" class="btn-admin btn-admin-primary" id="btn-open-add-modal">
-          + Add New Fine Art Product
+          Add New Fine Art Product
         </button>
       </div>
     </header>
@@ -56,7 +56,7 @@
             </div>
 
             <button type="button" class="btn-admin btn-admin-secondary" id="btn-refresh-products">
-              ↻ Refresh
+              <span class="refresh-icon" style="display:inline-block;">↻</span> Refresh
             </button>
           </div>
         </div>
@@ -208,7 +208,33 @@
       // Search and Filter
       document.getElementById('admin-product-search')?.addEventListener('input', filterAndRender);
       document.getElementById('admin-category-filter')?.addEventListener('change', filterAndRender);
-      document.getElementById('btn-refresh-products')?.addEventListener('click', fetchProducts);
+      document.getElementById('btn-refresh-products')?.addEventListener('click', async () => {
+        const btn = document.getElementById('btn-refresh-products');
+        const icon = btn?.querySelector('.refresh-icon') || btn;
+        if (btn) btn.disabled = true;
+        if (icon) icon.classList.add('spin-icon');
+
+        const searchInput = document.getElementById('admin-product-search');
+        if (searchInput) searchInput.value = '';
+        const catFilter = document.getElementById('admin-category-filter');
+        if (catFilter) catFilter.value = 'all';
+
+        try {
+          await fetchProducts();
+          if (typeof AdminToast !== 'undefined') {
+            AdminToast.show('Catalog refreshed successfully.', 'success');
+          }
+        } catch (err) {
+          if (typeof AdminToast !== 'undefined') {
+            AdminToast.show('Refresh failed: ' + err.message, 'error');
+          }
+        } finally {
+          setTimeout(() => {
+            if (btn) btn.disabled = false;
+            if (icon) icon.classList.remove('spin-icon');
+          }, 450);
+        }
+      });
 
       // Open Add Modal
       document.getElementById('btn-open-add-modal')?.addEventListener('click', () => {
@@ -282,7 +308,7 @@
             closeModal();
             await fetchProducts();
           } else {
-            alert(res?.message || 'Failed to save product.');
+            alert(res?.error || res?.message || 'Failed to save product.');
           }
         } catch (err) {
           alert('Error: ' + err.message);
@@ -316,7 +342,11 @@
 
       let list = [...currentProducts];
       if (cat !== 'all') {
-        list = list.filter(p => p.category === cat);
+        const normCat = cat.toLowerCase().replace(/[^a-z0-9]/g, '');
+        list = list.filter(p => {
+          const itemCat = String(p.category || p.category_id || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+          return itemCat === normCat;
+        });
       }
       if (search) {
         list = list.filter(p => p.name.toLowerCase().includes(search) || p.brand.toLowerCase().includes(search) || p.id.toLowerCase().includes(search));
@@ -331,14 +361,14 @@
         <tr>
           <td>
             <div class="admin-table-product-cell">
-              <img src="${p.image || `../Products/${p.category || 'Accessories'}/${(p.image ? p.image.split('/').pop() : 'clay-tools.webp')}`}" alt="${p.name}" class="admin-table-thumbnail" onerror="this.onerror=null; this.src='../Products/Accessories/clay-tools.webp';" />
-              <div>
-                <strong style="font-size: 0.9rem;">${p.name}</strong>
-                <div style="font-size: 0.74rem; color: var(--admin-text-secondary); font-family: monospace;">SKU: ${p.id}</div>
+              <img src="${p.image || AdminCommon.PLACEHOLDER_IMAGE}" alt="${p.name}" class="admin-table-thumbnail" onerror="AdminCommon.handleImgError(this)" />
+              <div class="admin-product-info">
+                <div class="admin-table-product-title" title="${p.name}">${p.name}</div>
+                <div class="admin-table-product-sku">SKU: ${p.id}</div>
               </div>
             </div>
           </td>
-          <td>${p.category}</td>
+          <td>${(p.category || p.category_id || 'Fine Art').split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}</td>
           <td><strong>${p.brand}</strong></td>
           <td>
             <strong>₹${Number(p.price).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
@@ -407,7 +437,7 @@
             alert('Product removed from database.');
             await fetchProducts();
           } else {
-            alert(res?.message || 'Failed to delete product.');
+            alert(res?.error || res?.message || 'Failed to delete product.');
           }
         } catch (err) {
           alert('Error: ' + err.message);

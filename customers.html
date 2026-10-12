@@ -16,11 +16,11 @@
   <main class="admin-main">
     <header class="admin-header">
       <div class="admin-header-left">
-        <h1 class="admin-page-title">Authorized Patron & Atelier Directory</h1>
+        <h1 class="admin-page-title">Customer Directory</h1>
       </div>
       <div class="admin-header-right">
         <button type="button" class="btn-admin btn-admin-secondary" id="btn-refresh-customers">
-          ↻ Refresh Directory
+          Refresh Directory
         </button>
       </div>
     </header>
@@ -35,12 +35,12 @@
                 type="text" 
                 id="admin-customer-search" 
                 class="admin-form-control" 
-                placeholder="Search patrons by name, discipline, email, or city..." 
+                placeholder="Search customers by name, discipline, email, or city..." 
               />
             </div>
-            <div>
+            <div style="flex-shrink: 0;">
               <span class="admin-badge admin-badge-info" style="font-size: 0.8rem; padding: 8px 14px;">
-                🔒 GDPR & Sensitive Data Sanitized
+                GDPR & Sensitive Data Sanitized
               </span>
             </div>
           </div>
@@ -51,7 +51,7 @@
       <div class="admin-card">
         <div class="admin-card-header">
           <div style="display: flex; align-items: center; gap: 10px;">
-            <h2 class="admin-card-title">Registered Art Studios & Artists</h2>
+            <h2 class="admin-card-title">Registered Customers</h2>
             <span class="admin-badge admin-badge-info" id="admin-customers-count">Loading...</span>
           </div>
         </div>
@@ -61,7 +61,7 @@
             <table class="admin-table">
               <thead>
                 <tr>
-                  <th>Patron Name & ID</th>
+                  <th>Customer Name & ID</th>
                   <th>Contact Email</th>
                   <th>Location</th>
                   <th>Creative Discipline</th>
@@ -74,7 +74,7 @@
               <tbody id="admin-customers-tbody">
                 <tr>
                   <td colspan="8" style="text-align: center; padding: 32px; color: var(--admin-text-secondary);">
-                    Loading registered patrons from backend...
+                    Loading registered customers from backend...
                   </td>
                 </tr>
               </tbody>
@@ -99,7 +99,31 @@
     });
 
     function bindEvents() {
-      document.getElementById('btn-refresh-customers')?.addEventListener('click', fetchCustomers);
+      document.getElementById('btn-refresh-customers')?.addEventListener('click', async () => {
+        const btn = document.getElementById('btn-refresh-customers');
+        const icon = btn?.querySelector('.refresh-icon') || btn;
+        if (btn) btn.disabled = true;
+        if (icon) icon.classList.add('spin-icon');
+
+        const searchInput = document.getElementById('admin-customer-search');
+        if (searchInput) searchInput.value = '';
+
+        try {
+          await fetchCustomers();
+          if (typeof AdminToast !== 'undefined') {
+            AdminToast.show('Customer directory refreshed successfully.', 'success');
+          }
+        } catch (err) {
+          if (typeof AdminToast !== 'undefined') {
+            AdminToast.show('Refresh failed: ' + err.message, 'error');
+          }
+        } finally {
+          setTimeout(() => {
+            if (btn) btn.disabled = false;
+            if (icon) icon.classList.remove('spin-icon');
+          }, 450);
+        }
+      });
       document.getElementById('admin-customer-search')?.addEventListener('input', filterAndRender);
     }
 
@@ -111,7 +135,7 @@
         const res = await ApiClient.get(API_CONFIG.ENDPOINTS.ADMIN_CUSTOMERS);
         if (res && res.success) {
           currentCustomers = res.customers || [];
-          if (countEl) countEl.textContent = `${currentCustomers.length} Patrons`;
+          if (countEl) countEl.textContent = `${currentCustomers.length} Customers`;
           filterAndRender();
         }
       } catch (err) {
@@ -135,7 +159,7 @@
       }
 
       if (list.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 32px;">No matching patrons found.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 32px;">No matching customers found.</td></tr>`;
         return;
       }
 

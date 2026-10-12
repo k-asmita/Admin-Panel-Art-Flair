@@ -16,11 +16,11 @@
   <main class="admin-main">
     <header class="admin-header">
       <div class="admin-header-left">
-        <h1 class="admin-page-title">Stock Levels & Atelier Inventory</h1>
+        <h1 class="admin-page-title">Inventory & Stock</h1>
       </div>
       <div class="admin-header-right">
         <button type="button" class="btn-admin btn-admin-secondary" id="btn-refresh-inventory">
-          ↻ Refresh Stock Levels
+          Refresh Stock Levels
         </button>
       </div>
     </header>
@@ -31,7 +31,6 @@
         <div class="admin-stat-card">
           <div class="admin-stat-header">
             <span class="admin-stat-label">Total SKUs Tracked</span>
-            <div class="admin-stat-icon icon-terracotta">📦</div>
           </div>
           <div class="admin-stat-value" id="stat-total-skus">-</div>
           <div class="admin-stat-subtext">Active database materials</div>
@@ -40,7 +39,6 @@
         <div class="admin-stat-card">
           <div class="admin-stat-header">
             <span class="admin-stat-label">Healthy Stock</span>
-            <div class="admin-stat-icon icon-sage">✓</div>
           </div>
           <div class="admin-stat-value" id="stat-healthy-stock" style="color: var(--admin-sage);">-</div>
           <div class="admin-stat-subtext">> 10 units available</div>
@@ -49,7 +47,6 @@
         <div class="admin-stat-card">
           <div class="admin-stat-header">
             <span class="admin-stat-label">Low Stock Warnings</span>
-            <div class="admin-stat-icon icon-gold">⚠️</div>
           </div>
           <div class="admin-stat-value" id="stat-low-stock" style="color: #B38600;">-</div>
           <div class="admin-stat-subtext">1 to 10 units remaining</div>
@@ -58,7 +55,6 @@
         <div class="admin-stat-card">
           <div class="admin-stat-header">
             <span class="admin-stat-label">Depleted / Out of Stock</span>
-            <div class="admin-stat-icon icon-red">✕</div>
           </div>
           <div class="admin-stat-value" id="stat-out-of-stock" style="color: var(--admin-red);">-</div>
           <div class="admin-stat-subtext">0 units in warehouse</div>
@@ -68,7 +64,7 @@
       <!-- Inventory Table Card -->
       <div class="admin-card">
         <div class="admin-card-header">
-          <h2 class="admin-card-title">Live Atelier Inventory Table</h2>
+          <h2 class="admin-card-title">Live Inventory Table</h2>
           
           <div style="display: flex; gap: 12px; align-items: center;">
             <select id="inventory-filter-status" class="admin-form-control" style="width: 170px; padding: 6px 12px; font-size: 0.82rem;" aria-label="Filter by stock status">
@@ -121,7 +117,31 @@
     });
 
     function bindEvents() {
-      document.getElementById('btn-refresh-inventory')?.addEventListener('click', fetchInventory);
+      document.getElementById('btn-refresh-inventory')?.addEventListener('click', async () => {
+        const btn = document.getElementById('btn-refresh-inventory');
+        const icon = btn?.querySelector('.refresh-icon') || btn;
+        if (btn) btn.disabled = true;
+        if (icon) icon.classList.add('spin-icon');
+
+        const statusFilter = document.getElementById('inventory-filter-status');
+        if (statusFilter) statusFilter.value = 'all';
+
+        try {
+          await fetchInventory();
+          if (typeof AdminToast !== 'undefined') {
+            AdminToast.show('Inventory refreshed successfully.', 'success');
+          }
+        } catch (err) {
+          if (typeof AdminToast !== 'undefined') {
+            AdminToast.show('Refresh failed: ' + err.message, 'error');
+          }
+        } finally {
+          setTimeout(() => {
+            if (btn) btn.disabled = false;
+            if (icon) icon.classList.remove('spin-icon');
+          }, 450);
+        }
+      });
       document.getElementById('inventory-filter-status')?.addEventListener('change', renderTable);
     }
 
@@ -140,15 +160,18 @@
     }
 
     function updateSummaryMetrics() {
-      const total = inventoryItems.length;
-      const healthy = inventoryItems.filter(i => i.stock > 10).length;
-      const low = inventoryItems.filter(i => i.stock > 0 && i.stock <= 10).length;
-      const out = inventoryItems.filter(i => i.stock === 0).length;
+      const evaluation = typeof AdminInventory !== 'undefined'
+        ? AdminInventory.evaluateStock(inventoryItems)
+        : {
+            healthyCount: inventoryItems.filter(i => i.stock > 10).length,
+            lowCount: inventoryItems.filter(i => i.stock > 0 && i.stock <= 10).length,
+            outCount: inventoryItems.filter(i => i.stock === 0).length
+          };
 
-      document.getElementById('stat-total-skus').textContent = total;
-      document.getElementById('stat-healthy-stock').textContent = healthy;
-      document.getElementById('stat-low-stock').textContent = low;
-      document.getElementById('stat-out-of-stock').textContent = out;
+      document.getElementById('stat-total-skus').textContent = inventoryItems.length;
+      document.getElementById('stat-healthy-stock').textContent = evaluation.healthyCount;
+      document.getElementById('stat-low-stock').textContent = evaluation.lowCount;
+      document.getElementById('stat-out-of-stock').textContent = evaluation.outCount;
     }
 
     function renderTable() {
@@ -167,21 +190,27 @@
 
       tbody.innerHTML = list.map(item => {
         let badgeClass = 'admin-badge-success';
-        if (item.stock === 0) badgeClass = 'admin-badge-danger';
-        else if (item.stock <= 10) badgeClass = 'admin-badge-warning';
+        let statusLabel = 'In Stock';
+        if (item.stock === 0) {
+          badgeClass = 'admin-badge-danger';
+          statusLabel = 'Out of Stock';
+        } else if (item.stock <= 10) {
+          badgeClass = 'admin-badge-warning';
+          statusLabel = 'Low Stock';
+        }
 
         return `
           <tr>
             <td>
               <div class="admin-table-product-cell">
-                <img src="${item.image || `../Products/${item.category || 'Accessories'}/${(item.image ? item.image.split('/').pop() : 'clay-tools.webp')}`}" alt="${item.name}" class="admin-table-thumbnail" onerror="this.onerror=null; this.src='../Products/Accessories/clay-tools.webp';" />
-                <div>
-                  <strong style="font-size: 0.88rem;">${item.name}</strong>
-                  <div style="font-size: 0.72rem; color: var(--admin-text-secondary); font-family: monospace;">SKU: ${item.id}</div>
+                <img src="${item.image || AdminCommon.PLACEHOLDER_IMAGE}" alt="${item.name}" class="admin-table-thumbnail" onerror="AdminCommon.handleImgError(this)" />
+                <div class="admin-product-info">
+                  <div class="admin-table-product-title" title="${item.name}">${item.name}</div>
+                  <div class="admin-table-product-sku">SKU: ${item.id}</div>
                 </div>
               </div>
             </td>
-            <td>${item.category}</td>
+            <td>${(item.category || item.category_id || 'Fine Art').split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}</td>
             <td><strong>₹${Number(item.price).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></td>
             <td>
               <strong style="font-size: 1.1rem; color: ${item.stock <= 10 ? (item.stock === 0 ? 'var(--admin-red)' : '#B38600') : 'var(--admin-text)'};" id="stock-val-${item.id}">
@@ -191,7 +220,7 @@
             </td>
             <td>
               <span class="admin-badge ${badgeClass}" id="stock-badge-${item.id}">
-                ${item.status}
+                ${statusLabel}
               </span>
             </td>
             <td>
@@ -245,7 +274,7 @@
           renderTable();
           alert(`Stock updated to ${newStock} units in database.`);
         } else {
-          alert(res?.message || 'Failed to update stock');
+          alert(res?.error || res?.message || 'Failed to update stock');
         }
       } catch (err) {
         alert('Error updating stock: ' + err.message);

@@ -16,11 +16,11 @@
   <main class="admin-main">
     <header class="admin-header">
       <div class="admin-header-left">
-        <h1 class="admin-page-title">Patron Orders & Logistics Fulfillment</h1>
+        <h1 class="admin-page-title">Orders</h1>
       </div>
       <div class="admin-header-right">
         <button type="button" class="btn-admin btn-admin-secondary" id="btn-refresh-orders">
-          ↻ Refresh Orders
+          Refresh Orders
         </button>
       </div>
     </header>
@@ -67,14 +67,14 @@
             <table class="admin-table">
               <thead>
                 <tr>
-                  <th>Order Reference</th>
-                  <th>Patron / Atelier</th>
-                  <th>Order Date</th>
-                  <th>Materials</th>
-                  <th>Total (INR)</th>
-                  <th>Payment</th>
-                  <th>Fulfillment Status</th>
-                  <th>Action</th>
+                  <th class="text-left" style="width: 15%;">Order Reference</th>
+                  <th class="text-left" style="width: 23%;">Patron / Atelier</th>
+                  <th class="text-center" style="width: 12%;">Order Date</th>
+                  <th class="text-center" style="width: 10%;">Materials</th>
+                  <th class="text-right" style="width: 14%;">Total (INR)</th>
+                  <th class="text-center" style="width: 10%;">Payment</th>
+                  <th class="text-center" style="width: 10%;">Fulfillment Status</th>
+                  <th class="text-right" style="width: 6%;">Action</th>
                 </tr>
               </thead>
               <tbody id="admin-orders-tbody">
@@ -123,7 +123,33 @@
     });
 
     function bindEvents() {
-      document.getElementById('btn-refresh-orders')?.addEventListener('click', fetchOrders);
+      document.getElementById('btn-refresh-orders')?.addEventListener('click', async () => {
+        const btn = document.getElementById('btn-refresh-orders');
+        const icon = btn?.querySelector('.refresh-icon') || btn;
+        if (btn) btn.disabled = true;
+        if (icon) icon.classList.add('spin-icon');
+
+        const searchInput = document.getElementById('admin-order-search');
+        if (searchInput) searchInput.value = '';
+        const statusFilter = document.getElementById('admin-order-status-filter');
+        if (statusFilter) statusFilter.value = 'all';
+
+        try {
+          await fetchOrders();
+          if (typeof AdminToast !== 'undefined') {
+            AdminToast.show('Orders refreshed successfully.', 'success');
+          }
+        } catch (err) {
+          if (typeof AdminToast !== 'undefined') {
+            AdminToast.show('Refresh failed: ' + err.message, 'error');
+          }
+        } finally {
+          setTimeout(() => {
+            if (btn) btn.disabled = false;
+            if (icon) icon.classList.remove('spin-icon');
+          }, 450);
+        }
+      });
       document.getElementById('admin-order-search')?.addEventListener('input', filterAndRender);
       document.getElementById('admin-order-status-filter')?.addEventListener('change', filterAndRender);
 
@@ -146,7 +172,7 @@
             closeModal();
             await fetchOrders();
           } else {
-            alert(res?.message || 'Failed to update order status');
+            alert(res?.error || res?.message || 'Failed to update order status');
           }
         } catch (err) {
           alert('Error: ' + err.message);
@@ -193,7 +219,16 @@
       }
 
       if (list.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 32px;">No matching orders found.</td></tr>`;
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="8" style="padding: 0;">
+              <div class="admin-empty-state">
+                <div class="admin-empty-title">No studio orders yet</div>
+                <div class="admin-empty-subtext">Orders will appear here once patrons check out.</div>
+              </div>
+            </td>
+          </tr>
+        `;
         return;
       }
 
@@ -207,22 +242,22 @@
 
         return `
           <tr>
-            <td><strong style="font-family: monospace;">${o.orderId}</strong></td>
-            <td>
+            <td class="text-left" style="vertical-align: middle;"><strong style="font-family: monospace;">${o.orderId}</strong></td>
+            <td class="text-left" style="vertical-align: middle;">
               <div><strong>${customerName}</strong></div>
               <div style="font-size: 0.74rem; color: var(--admin-text-secondary);">${o.shippingAddress?.city || 'India'} • ${o.customer?.phone || ''}</div>
             </td>
-            <td>${new Date(o.orderDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
-            <td>${o.items?.length || 0} unique items</td>
-            <td><strong>₹${Number(o.total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></td>
-            <td>
+            <td class="text-center" style="vertical-align: middle;">${new Date(o.orderDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
+            <td class="text-center" style="vertical-align: middle;">${o.items?.length || 0} unique items</td>
+            <td class="text-right" style="vertical-align: middle;"><strong>${AdminCommon.formatINR(o.total)}</strong></td>
+            <td class="text-center" style="vertical-align: middle;">
               <span class="admin-badge admin-badge-success" style="font-size: 0.7rem;">${o.paymentStatus || 'Paid'}</span>
               <div style="font-size: 0.72rem; color: var(--admin-text-secondary); margin-top: 2px;">${o.paymentMethod || 'UPI'}</div>
             </td>
-            <td>
+            <td class="text-center" style="vertical-align: middle;">
               <span class="admin-badge ${badgeClass}">${o.status}</span>
             </td>
-            <td>
+            <td class="text-right" style="vertical-align: middle;">
               <button type="button" class="btn-admin btn-admin-secondary btn-admin-sm" onclick="viewOrderDetails('${o.orderId}')">
                 Update Status
               </button>
@@ -273,7 +308,7 @@
           ${(selectedOrder.items || []).map(item => `
             <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: #FFFDF9; border: 1px solid var(--admin-border-light); border-radius: 6px;">
               <div style="display: flex; align-items: center; gap: 10px;">
-                <img src="${item.image || `../Products/${item.category || 'Accessories'}/${(item.image ? item.image.split('/').pop() : 'clay-tools.webp')}`}" style="width: 32px; height: 32px; border-radius: 4px; object-fit: cover;" onerror="this.onerror=null; this.src='../Products/Accessories/clay-tools.webp';" />
+                <img src="${item.image || AdminCommon.PLACEHOLDER_IMAGE}" style="width: 32px; height: 32px; border-radius: 4px; object-fit: cover;" onerror="AdminCommon.handleImgError(this)" />
                 <span style="font-size: 0.85rem; font-weight: 600;">${item.name}</span>
               </div>
               <span style="font-size: 0.85rem; color: var(--admin-text-secondary);">Qty: ${item.quantity} × ₹${Number(item.price).toLocaleString('en-IN')}</span>

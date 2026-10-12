@@ -20,11 +20,11 @@
     <!-- Header -->
     <header class="admin-header">
       <div class="admin-header-left">
-        <h1 class="admin-page-title">Executive Atelier Dashboard</h1>
+        <h1 class="admin-page-title">Dashboard</h1>
       </div>
       <div class="admin-header-right">
-        <span class="admin-badge admin-badge-info" id="db-status-badge">● Initializing DB Status...</span>
-        <a href="products.html" class="btn-admin btn-admin-primary">+ Add New Medium</a>
+        <span class="admin-badge admin-badge-info" id="db-status-badge">Initializing DB Status...</span>
+        <a href="products.html" class="btn-admin btn-admin-primary">Add New Medium</a>
       </div>
     </header>
 
@@ -43,7 +43,7 @@
         <!-- Low Stock Alerts Panel -->
         <div class="admin-card" style="margin-bottom: 0;">
           <div class="admin-card-header">
-            <h2 class="admin-card-title">⚠️ Low Stock Material Alerts</h2>
+            <h2 class="admin-card-title">Low Stock Material Alerts</h2>
             <a href="inventory.html" class="btn-admin btn-admin-secondary btn-admin-sm">Manage Inventory →</a>
           </div>
           <div class="admin-card-body" id="dashboard-low-stock-container" style="padding: 0;">
@@ -53,30 +53,51 @@
           </div>
         </div>
 
-        <!-- System & Catalog Health -->
-        <div class="admin-card" style="margin-bottom: 0;">
+        <!-- System & Catalog Health (Overview) -->
+        <div class="admin-card atelier-status-card" style="margin-bottom: 0;">
           <div class="admin-card-header">
-            <h2 class="admin-card-title">🎨 Atelier Status & System Overview</h2>
+            <h2 class="admin-card-title">Art Flair Stationary Overview</h2>
             <span class="admin-badge admin-badge-info">Active Version 2.4</span>
           </div>
           <div class="admin-card-body">
-            <div style="display: flex; flex-direction: column; gap: 14px;">
-              <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--admin-border-light);">
+            <div style="display: flex; flex-direction: column; gap: 13px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 9px; border-bottom: 1px solid var(--admin-border-light);">
                 <span style="font-weight: 600;">Store Currency</span>
                 <strong>Indian Rupees (₹ - INR)</strong>
               </div>
-              <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--admin-border-light);">
+              <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 9px; border-bottom: 1px solid var(--admin-border-light);">
                 <span style="font-weight: 600;">Tax Engine Rate</span>
-                <strong>12% GST on Fine Art Supplies</strong>
+                <strong id="dashboard-tax-rate-label">Loading...</strong>
               </div>
-              <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--admin-border-light);">
+              <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 9px; border-bottom: 1px solid var(--admin-border-light);">
                 <span style="font-weight: 600;">Free Shipping Threshold</span>
                 <strong style="color: var(--admin-sage);">Orders ₹1,499.00 and above</strong>
               </div>
-              <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 9px; border-bottom: 1px solid var(--admin-border-light);">
                 <span style="font-weight: 600;">AI Recommendation Server</span>
                 <span class="admin-badge admin-badge-success">Operational & Scoring</span>
               </div>
+            </div>
+
+            <!-- Atelier Live Stock & Operations Snapshot -->
+            <div class="atelier-snapshot-grid" id="atelier-snapshot-container">
+              <div class="atelier-snapshot-item">
+                <span class="atelier-snapshot-label">In Stock</span>
+                <span class="atelier-snapshot-value" style="color: var(--admin-sage);" id="snapshot-healthy">-</span>
+              </div>
+              <div class="atelier-snapshot-item">
+                <span class="atelier-snapshot-label">Low Stock</span>
+                <span class="atelier-snapshot-value" style="color: #B38600;" id="snapshot-low">-</span>
+              </div>
+              <div class="atelier-snapshot-item">
+                <span class="atelier-snapshot-label">Depleted</span>
+                <span class="atelier-snapshot-value" style="color: var(--admin-red);" id="snapshot-out">-</span>
+              </div>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--admin-border-light); font-size: 0.78rem; color: var(--admin-text-secondary); flex-wrap: gap: 8px;">
+              <span>Synchronized: <strong id="last-stock-audit-time" style="color: var(--admin-text);">Today</strong></span>
+              <a href="products.html" class="btn-admin btn-admin-primary btn-admin-sm" style="padding: 6px 14px; font-size: 0.8rem;">Add New Medium</a>
             </div>
           </div>
         </div>
@@ -85,7 +106,7 @@
       <!-- Recent Customer Orders Table (Dynamic from Backend) -->
       <div class="admin-card">
         <div class="admin-card-header">
-          <h2 class="admin-card-title">📦 Recent Studio Orders & Dispatch Status</h2>
+          <h2 class="admin-card-title">Recent Orders & Dispatch Status</h2>
           <a href="orders.html" class="btn-admin btn-admin-secondary btn-admin-sm">View All Orders →</a>
         </div>
         <div class="admin-card-body" style="padding: 0;">
@@ -93,13 +114,13 @@
             <table class="admin-table">
               <thead>
                 <tr>
-                  <th>Order Reference</th>
-                  <th>Customer Atelier</th>
-                  <th>Date</th>
-                  <th>Items</th>
-                  <th>Total (INR)</th>
-                  <th>Status</th>
-                  <th>Action</th>
+                  <th class="text-left" style="width: 18%;">Order Reference</th>
+                  <th class="text-left" style="width: 26%;">Customer Atelier</th>
+                  <th class="text-center" style="width: 14%;">Date</th>
+                  <th class="text-center" style="width: 10%;">Items</th>
+                  <th class="text-right" style="width: 14%;">Total (INR)</th>
+                  <th class="text-center" style="width: 10%;">Status</th>
+                  <th class="text-right" style="width: 8%;">Action</th>
                 </tr>
               </thead>
               <tbody id="dashboard-recent-orders-tbody">
@@ -124,6 +145,13 @@
   <script>
     document.addEventListener('DOMContentLoaded', async () => {
       AdminLayout.render('dashboard');
+      
+      // Render dynamic Tax Engine Rate from config
+      const taxRateLabel = document.getElementById('dashboard-tax-rate-label');
+      if (taxRateLabel && typeof API_CONFIG !== 'undefined' && API_CONFIG.TAX) {
+        taxRateLabel.textContent = API_CONFIG.TAX.getFormattedRate();
+      }
+
       await loadDashboardData();
     });
 
@@ -139,91 +167,155 @@
           throw new Error('Failed to retrieve statistics from backend');
         }
 
+        const stats = res.stats;
+        const recentOrders = stats.recentOrders || [];
+
+        // Unified Orders & Consistency: totalOrders, revenue, badge and orders table MUST agree
+        const totalOrders = typeof stats.totalOrders === 'number' ? stats.totalOrders : recentOrders.length;
+        const totalRevenue = typeof stats.totalRevenue === 'number' 
+          ? stats.totalRevenue 
+          : recentOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+
         if (dbStatusBadge) {
           if (res.isLiveDb) {
             dbStatusBadge.className = 'admin-badge admin-badge-success';
-            dbStatusBadge.textContent = '● Database Connected (INR)';
+            dbStatusBadge.textContent = `MySQL Live Connected (${stats.totalProducts || 73} Products · ${totalOrders} Orders)`;
+            dbStatusBadge.title = 'Connected to Aiven MySQL 8.4 (art_flair)';
+          } else if (totalOrders > 0) {
+            dbStatusBadge.className = 'admin-badge admin-badge-warning';
+            dbStatusBadge.textContent = `Local Cache (${totalOrders} Orders)`;
           } else {
             dbStatusBadge.className = 'admin-badge admin-badge-warning';
-            dbStatusBadge.textContent = '○ Database Standby / No Orders Placed';
+            dbStatusBadge.textContent = 'Local Cache Standby';
           }
         }
 
-        const stats = res.stats;
+        // Shared stock evaluation engine ensures card count and table list ALWAYS match
+        let rawProducts = stats.lowStockProducts || [];
+        // If stats contains all products or only alert products, evaluate using shared AdminInventory
+        let stockEval;
+        if (typeof AdminInventory !== 'undefined') {
+          // If we have total products count and lowStockProducts list, evaluate directly
+          const outOfStockItems = rawProducts.filter(p => Number(p.stock) === 0);
+          const lowStockItems = rawProducts.filter(p => Number(p.stock) > 0 && Number(p.stock) <= AdminInventory.STOCK_LOW_THRESHOLD);
+          
+          // Sort with Out of Stock first, then ascending by stock
+          const allAlerts = [...outOfStockItems, ...lowStockItems.sort((a, b) => Number(a.stock) - Number(b.stock))];
+          
+          const totalProds = stats.totalProducts || rawProducts.length;
+          const healthyCount = Math.max(0, totalProds - allAlerts.length);
+
+          stockEval = {
+            allAlerts,
+            outCount: outOfStockItems.length,
+            lowCount: lowStockItems.length,
+            healthyCount: healthyCount,
+            summaryText: `${lowStockItems.length} low stock · ${outOfStockItems.length} out of stock`
+          };
+        } else {
+          stockEval = {
+            allAlerts: rawProducts,
+            outCount: rawProducts.filter(p => p.stock === 0).length,
+            lowCount: rawProducts.filter(p => p.stock > 0).length,
+            healthyCount: 0,
+            summaryText: stats.summaryText || `${rawProducts.length} stock alerts`
+          };
+        }
+
+        // Update Atelier Snapshot Widget in Overview Card
+        const snapHealthy = document.getElementById('snapshot-healthy');
+        const snapLow = document.getElementById('snapshot-low');
+        const snapOut = document.getElementById('snapshot-out');
+        const auditTimeEl = document.getElementById('last-stock-audit-time');
+
+        if (snapHealthy) snapHealthy.textContent = `${stockEval.healthyCount} Adequate`;
+        if (snapLow) snapLow.textContent = `${stockEval.lowCount} Alert${stockEval.lowCount === 1 ? '' : 's'}`;
+        if (snapOut) snapOut.textContent = `${stockEval.outCount} Depleted`;
+        if (auditTimeEl) {
+          const now = new Date();
+          auditTimeEl.textContent = now.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }) + ', ' + now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+        }
 
         // 1. Metric Cards
         metricsContainer.innerHTML = `
           <div class="admin-stat-card">
             <div class="admin-stat-header">
               <span class="admin-stat-label">Total Revenue</span>
-              <div class="admin-stat-icon icon-terracotta">₹</div>
             </div>
-            <div class="admin-stat-value">₹${stats.totalRevenue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+            <div class="admin-stat-value">${AdminCommon.formatINR(totalRevenue)}</div>
             <div class="admin-stat-subtext">Verified sales volume</div>
           </div>
 
           <div class="admin-stat-card">
             <div class="admin-stat-header">
               <span class="admin-stat-label">Total Orders</span>
-              <div class="admin-stat-icon icon-sage">📦</div>
             </div>
-            <div class="admin-stat-value">${stats.totalOrders}</div>
+            <div class="admin-stat-value">${totalOrders}</div>
             <div class="admin-stat-subtext">Dispatched & In-Transit</div>
           </div>
 
           <div class="admin-stat-card">
             <div class="admin-stat-header">
               <span class="admin-stat-label">Active Patrons</span>
-              <div class="admin-stat-icon icon-gold">👥</div>
             </div>
-            <div class="admin-stat-value">${stats.totalCustomers}</div>
+            <div class="admin-stat-value">${stats.totalCustomers || 0}</div>
             <div class="admin-stat-subtext">Registered art studios</div>
           </div>
 
           <div class="admin-stat-card">
             <div class="admin-stat-header">
               <span class="admin-stat-label">Catalog Products</span>
-              <div class="admin-stat-icon icon-terracotta">🎨</div>
             </div>
-            <div class="admin-stat-value">${stats.totalProducts}</div>
-            <div class="admin-stat-subtext">${stats.lowStockCount} low-stock alerts</div>
+            <div class="admin-stat-value">${stats.totalProducts || 0}</div>
+            <div class="admin-stat-subtext">${stockEval.summaryText}</div>
           </div>
         `;
 
-        // 2. Low Stock Alerts List
-        if (!stats.lowStockProducts || stats.lowStockProducts.length === 0) {
+        // 2. Low Stock Alerts List (Rebalanced columns, fixed 48x48 thumbnail, 2-line title ellipsis with tooltip)
+        if (!stockEval.allAlerts || stockEval.allAlerts.length === 0) {
           lowStockContainer.innerHTML = `
-            <div style="padding: 24px; text-align: center; color: var(--admin-sage);">
-              ✓ All fine art materials are adequately stocked.
+            <div style="padding: 32px 20px; text-align: center; color: var(--admin-sage);">
+              <strong>All fine art materials are adequately stocked.</strong>
             </div>
           `;
         } else {
           lowStockContainer.innerHTML = `
-            <div class="admin-table-container">
-              <table class="admin-table">
+            <div class="admin-table-container admin-table-scroll-container">
+              <table class="admin-table admin-table-fixed">
                 <thead>
                   <tr>
-                    <th>Material</th>
-                    <th>Category</th>
-                    <th>Current Stock</th>
-                    <th>Alert</th>
+                    <th class="col-material text-left">Material</th>
+                    <th class="col-category text-left">Category</th>
+                    <th class="col-stock text-center">Current Stock</th>
+                    <th class="col-alert text-center">Alert</th>
                   </tr>
                 </thead>
                 <tbody>
-                  ${stats.lowStockProducts.map(p => `
+                  ${stockEval.allAlerts.map(p => `
                     <tr>
-                      <td>
+                      <td class="col-material">
                         <div class="admin-table-product-cell">
-                          <img src="${p.image}" alt="${p.name}" class="admin-table-thumbnail" />
-                          <div>
-                            <strong style="font-size: 0.85rem;">${p.name}</strong>
-                            <div style="font-size: 0.72rem; color: var(--admin-text-secondary);">${p.id}</div>
+                          <img 
+                            src="${p.image || AdminCommon.PLACEHOLDER_IMAGE}" 
+                            alt="${p.name}" 
+                            class="admin-table-thumbnail" 
+                            onerror="AdminCommon.handleImgError(this)" 
+                          />
+                          <div class="admin-product-info">
+                            <div class="admin-table-product-title" title="${p.name}">${p.name}</div>
+                            <div class="admin-table-product-sku">${p.id}</div>
                           </div>
                         </div>
                       </td>
-                      <td>${p.category}</td>
-                      <td><strong style="color: ${p.stock === 0 ? 'var(--admin-red)' : '#B38600'};">${p.stock} units</strong></td>
-                      <td>
+                      <td class="col-category text-left" style="vertical-align: middle;">
+                        <span>${p.category}</span>
+                      </td>
+                      <td class="col-stock text-center" style="vertical-align: middle;">
+                        <strong style="color: ${p.stock === 0 ? 'var(--admin-red)' : '#B38600'}; font-feature-settings: 'tnum';">
+                          ${p.stock} units
+                        </strong>
+                      </td>
+                      <td class="col-alert text-center" style="vertical-align: middle;">
                         <span class="admin-badge ${p.stock === 0 ? 'admin-badge-danger' : 'admin-badge-warning'}">
                           ${p.stock === 0 ? 'Out of Stock' : 'Low Stock'}
                         </span>
@@ -236,15 +328,20 @@
           `;
         }
 
-        // 3. Recent Orders
-        if (!stats.recentOrders || stats.recentOrders.length === 0) {
+        // 3. Recent Orders Table (Proper alignment & polished empty state)
+        if (!recentOrders || recentOrders.length === 0) {
           ordersTbody.innerHTML = `
             <tr>
-              <td colspan="7" style="text-align: center; padding: 24px;">No studio orders on record.</td>
+              <td colspan="7" style="padding: 0;">
+                <div class="admin-empty-state">
+                  <div class="admin-empty-title">No studio orders yet</div>
+                  <div class="admin-empty-subtext">Orders will appear here once patrons check out.</div>
+                </div>
+              </td>
             </tr>
           `;
         } else {
-          ordersTbody.innerHTML = stats.recentOrders.map(o => {
+          ordersTbody.innerHTML = recentOrders.map(o => {
             let statusBadge = 'admin-badge-info';
             if (o.status === 'Delivered') statusBadge = 'admin-badge-success';
             else if (o.status === 'Shipped') statusBadge = 'admin-badge-warning';
@@ -252,16 +349,24 @@
 
             return `
               <tr>
-                <td><strong>${o.orderId}</strong></td>
-                <td>
+                <td class="text-left" style="vertical-align: middle;"><strong>${o.orderId}</strong></td>
+                <td class="text-left" style="vertical-align: middle;">
                   <div>${o.customer?.firstName || 'Artist'} ${o.customer?.lastName || ''}</div>
                   <div style="font-size: 0.72rem; color: var(--admin-text-secondary);">${o.customer?.email || ''}</div>
                 </td>
-                <td>${new Date(o.orderDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
-                <td>${o.items?.length || 0} items</td>
-                <td><strong>₹${Number(o.total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></td>
-                <td><span class="admin-badge ${statusBadge}">${o.status}</span></td>
-                <td>
+                <td class="text-center" style="vertical-align: middle;">
+                  ${new Date(o.orderDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                </td>
+                <td class="text-center" style="vertical-align: middle;">
+                  ${o.items?.length || 0} items
+                </td>
+                <td class="text-right" style="vertical-align: middle;">
+                  <strong>${AdminCommon.formatINR(o.total)}</strong>
+                </td>
+                <td class="text-center" style="vertical-align: middle;">
+                  <span class="admin-badge ${statusBadge}">${o.status}</span>
+                </td>
+                <td class="text-right" style="vertical-align: middle;">
                   <a href="orders.html" class="btn-admin btn-admin-secondary btn-admin-sm">Manage</a>
                 </td>
               </tr>
@@ -271,6 +376,11 @@
 
       } catch (err) {
         console.error(err);
+        if (dbStatusBadge) {
+          dbStatusBadge.className = 'admin-badge admin-badge-danger';
+          dbStatusBadge.textContent = '✕ Database Offline';
+          dbStatusBadge.title = 'Backend server unreachable. Run py app.py to start backend.';
+        }
         metricsContainer.innerHTML = `<div class="admin-card" style="grid-column: 1/-1; padding: 20px; color: var(--admin-red);">Failed to connect to backend statistics API.</div>`;
       }
     }

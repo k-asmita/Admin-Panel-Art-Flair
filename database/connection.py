@@ -112,7 +112,7 @@ class DatabaseConnection:
         password = DatabaseConfig.get_password()
         db_name = DatabaseConfig.get_db_name() if use_database else None
 
-        # 1. Try MySQL Connection if PyMySQL is available and host is configured
+        # 1. Connect to MySQL (Aiven Cloud or local) using PyMySQL
         if PYMYSQL_AVAILABLE and host and host != 'localhost_sqlite':
             try:
                 is_cloud = 'aivencloud.com' in host.lower() or port != 3306 or host not in ('localhost', '127.0.0.1')
@@ -128,14 +128,15 @@ class DatabaseConnection:
                     charset='utf8mb4',
                     cursorclass=pymysql.cursors.DictCursor,
                     autocommit=False,
-                    connect_timeout=5,
+                    connect_timeout=10,
                     ssl=ssl_config
                 )
                 return connection
             except Exception as my_err:
-                logger.warning(f"MySQL connection attempt failed ({my_err}). Falling back to local embedded store.")
+                logger.error(f"Aiven MySQL connection attempt failed: {my_err}")
+                raise my_err
 
-        # 2. Resilient SQLite Storage Fallback
+        # 2. Local SQLite fallback only if host is explicitly 'localhost_sqlite'
         db_path = Path(__file__).resolve().parent / 'art_flair_local.db'
         conn = sqlite3.connect(str(db_path))
         conn.row_factory = sqlite3.Row
@@ -256,12 +257,15 @@ def test_database_connection():
             with conn.cursor() as cur:
                 cur.execute("SELECT VERSION() AS version, CURRENT_USER() AS `authenticated_user`;")
                 info = cur.fetchone()
+                cur.execute("SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = %s;", (db_name,))
+                exists = cur.fetchone() is not None
             conn.close()
             return {
                 "connected": True,
                 "engine": "MySQL 8.0",
                 "mysql_version": info.get("version"),
                 "authenticated_user": info.get("authenticated_user"),
+                "database_exists": exists,
                 "host": host,
                 "port": port,
                 "database": db_name,

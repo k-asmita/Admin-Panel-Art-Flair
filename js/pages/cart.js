@@ -157,8 +157,11 @@ const CartPage = {
       const discountAmount = this.activePromoDiscount > 0 ? (subtotal * this.activePromoDiscount) : (summary.discount || 0);
       const freeShippingThreshold = API_CONFIG.SHIPPING.FREE_SHIPPING_THRESHOLD || 1499;
       const qualifiesForFreeShipping = subtotal >= freeShippingThreshold;
-      const shippingFee = qualifiesForFreeShipping || subtotal === 0 ? 0 : (API_CONFIG.SHIPPING.STANDARD_SHIPPING_FEE || 149);
-      const taxRate = API_CONFIG.SHIPPING.TAX_RATE || 0.12;
+      // Dynamic GST configuration
+      // TODO: Confirm the correct rate for each product category with an accountant or the GST portal following late 2025 slab restructuring.
+      const taxRate = (typeof API_CONFIG !== 'undefined' && API_CONFIG.TAX) 
+        ? API_CONFIG.TAX.getRate() 
+        : ((API_CONFIG.SHIPPING && API_CONFIG.SHIPPING.TAX_RATE) || 0.12);
       const estimatedTax = (subtotal - discountAmount) * taxRate;
       const grandTotal = Math.max(0, subtotal - discountAmount + shippingFee + estimatedTax);
 
@@ -332,7 +335,7 @@ const CartPage = {
             </div>
 
             <div class="summary-row">
-              <span>Estimated GST (12%)</span>
+              <span>Estimated GST (${Math.round(taxRate * 100)}%)</span>
               <span>₹${estimatedTax.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             </div>
 

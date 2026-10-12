@@ -181,8 +181,10 @@ const CheckoutPage = {
       const discountRate = (promo && promo.discount > 0) ? promo.discount : 0;
       const discountAmount = discountRate > 0 ? (subtotal * discountRate) : 0;
       const freeShippingThreshold = (typeof API_CONFIG !== 'undefined' && API_CONFIG.SHIPPING?.FREE_SHIPPING_THRESHOLD) || 1499;
-      const shippingFee = (subtotal >= freeShippingThreshold || subtotal === 0) ? 0 : ((typeof API_CONFIG !== 'undefined' && API_CONFIG.SHIPPING?.STANDARD_SHIPPING_FEE) || 149);
-      const taxRate = (typeof API_CONFIG !== 'undefined' && API_CONFIG.SHIPPING?.TAX_RATE) || 0.12;
+      // TODO: Confirm the correct rate for each product category with an accountant or the GST portal following late 2025 slab restructuring.
+      const taxRate = (typeof API_CONFIG !== 'undefined' && API_CONFIG.TAX) 
+        ? API_CONFIG.TAX.getRate() 
+        : ((typeof API_CONFIG !== 'undefined' && API_CONFIG.SHIPPING?.TAX_RATE) || 0.12);
       const taxableSubtotal = Math.max(0, subtotal - discountAmount);
       const tax = taxableSubtotal * taxRate;
       const total = Math.max(0, taxableSubtotal + shippingFee + tax);
