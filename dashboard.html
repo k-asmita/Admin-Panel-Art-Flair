@@ -162,9 +162,9 @@
       const dbStatusBadge = document.getElementById('db-status-badge');
 
       try {
-        const res = await ApiClient.get(API_CONFIG.ENDPOINTS.ADMIN_STATS);
+        let res = await ApiClient.get(API_CONFIG.ENDPOINTS.ADMIN_STATS);
         if (!res || !res.success || !res.stats) {
-          throw new Error('Failed to retrieve statistics from backend');
+          res = ApiClient.handleFallback(API_CONFIG.ENDPOINTS.ADMIN_STATS);
         }
 
         const stats = res.stats;

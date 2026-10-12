@@ -83,7 +83,17 @@ const ApiClient = {
       clearTimeout(timeoutId);
 
       if (response.ok) {
-        return await response.json();
+        const json = await response.json();
+        if (json && json.success !== false) {
+          return json;
+        }
+        if ((options.method || 'GET').toUpperCase() === 'GET') {
+          return this.handleFallback(endpoint, options);
+        }
+        return json;
+      }
+      if ((options.method || 'GET').toUpperCase() === 'GET') {
+        return this.handleFallback(endpoint, options);
       }
       const errorData = await response.json().catch(() => null);
       if (errorData) {

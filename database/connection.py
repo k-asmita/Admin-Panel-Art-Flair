@@ -119,19 +119,27 @@ class DatabaseConnection:
                 ssl_enabled = os.getenv('DB_SSL', '').lower() in ('true', '1', 'yes') or (is_cloud and os.getenv('DB_SSL', '').lower() != 'false')
                 ssl_config = {'ssl': True} if ssl_enabled else None
 
-                connection = pymysql.connect(
-                    host=host,
-                    port=port,
-                    user=user,
-                    password=password,
-                    database=db_name,
-                    charset='utf8mb4',
-                    cursorclass=pymysql.cursors.DictCursor,
-                    autocommit=False,
-                    connect_timeout=10,
-                    ssl=ssl_config
-                )
-                return connection
+                retries = 2
+                last_err = None
+                for attempt in range(retries):
+                    try:
+                        connection = pymysql.connect(
+                            host=host,
+                            port=port,
+                            user=user,
+                            password=password,
+                            database=db_name,
+                            charset='utf8mb4',
+                            cursorclass=pymysql.cursors.DictCursor,
+                            autocommit=False,
+                            connect_timeout=15,
+                            ssl=ssl_config
+                        )
+                        return connection
+                    except Exception as err:
+                        last_err = err
+                if last_err:
+                    raise last_err
             except Exception as my_err:
                 logger.error(f"Aiven MySQL connection attempt failed: {my_err}")
                 raise my_err

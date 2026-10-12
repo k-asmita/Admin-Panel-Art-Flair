@@ -3,7 +3,9 @@
    ============================================================================== */
 
 const API_CONFIG = {
-  BASE_URL: 'http://127.0.0.1:5000/api',
+  BASE_URL: (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')
+    ? `${window.location.origin}/api`
+    : 'http://127.0.0.1:5000/api',
   ENDPOINTS: {
     ADMIN_LOGIN: '/admin/login',
     ADMIN_STATS: '/admin/stats',
