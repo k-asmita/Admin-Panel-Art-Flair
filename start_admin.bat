@@ -16,8 +16,8 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 echo.
-echo [2/3] Launching Backend Server on http://localhost:5000...
-start "" "http://localhost:5000/dashboard.html"
+echo [2/3] Launching Backend Server on http://127.0.0.1:5000...
+start "" "http://127.0.0.1:5000/dashboard.html"
 
 echo.
 echo [3/3] Serving Admin Panel (Press Ctrl+C to stop)...

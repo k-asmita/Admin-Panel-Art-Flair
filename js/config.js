@@ -3,7 +3,7 @@
    ============================================================================== */
 
 const API_CONFIG = {
-  BASE_URL: 'http://localhost:5000/api',
+  BASE_URL: 'http://127.0.0.1:5000/api',
   ENDPOINTS: {
     ADMIN_LOGIN: '/admin/login',
     ADMIN_STATS: '/admin/stats',
