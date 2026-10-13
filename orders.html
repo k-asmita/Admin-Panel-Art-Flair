@@ -93,17 +93,24 @@
 
   <!-- Status Update / Order Details Modal -->
   <div class="admin-modal-backdrop" id="order-modal-backdrop">
-    <div class="admin-modal" style="max-width: 650px;">
+    <div class="admin-modal" style="max-width: 720px;">
       <div class="admin-modal-header">
-        <h3 class="admin-modal-title" id="order-modal-title">Manage Order Details</h3>
+        <h3 class="admin-modal-title" id="order-modal-title">Manage Order Details & Stock</h3>
         <button type="button" class="btn-admin btn-admin-secondary btn-admin-sm" id="btn-close-order-modal">✕</button>
       </div>
       <div class="admin-modal-body" id="order-modal-content">
         <!-- Injected via JavaScript -->
       </div>
-      <div class="admin-modal-footer">
-        <button type="button" class="btn-admin btn-admin-secondary" id="btn-dismiss-order-modal">Close</button>
-        <button type="button" class="btn-admin btn-admin-primary" id="btn-save-order-status">Save Status Update</button>
+      <div class="admin-modal-footer" style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
+        <div>
+          <button type="button" class="btn-admin btn-admin-outline" id="btn-modal-phpmailer-send" style="display: inline-flex; align-items: center; gap: 6px; border-color: #7C3AED; color: #7C3AED;">
+            📧 Send PHPMailer Receipt
+          </button>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button type="button" class="btn-admin btn-admin-secondary" id="btn-dismiss-order-modal">Close</button>
+          <button type="button" class="btn-admin btn-admin-primary" id="btn-save-order-status">Save Status Update</button>
+        </div>
       </div>
     </div>
   </div>
@@ -137,7 +144,7 @@
         try {
           await fetchOrders();
           if (typeof AdminToast !== 'undefined') {
-            AdminToast.show('Orders refreshed successfully.', 'success');
+            AdminToast.show('Orders refreshed directly from database.', 'success');
           }
         } catch (err) {
           if (typeof AdminToast !== 'undefined') {
@@ -156,19 +163,43 @@
       document.getElementById('btn-close-order-modal')?.addEventListener('click', closeModal);
       document.getElementById('btn-dismiss-order-modal')?.addEventListener('click', closeModal);
 
+      // Modal PHPMailer button
+      document.getElementById('btn-modal-phpmailer-send')?.addEventListener('click', async () => {
+        if (!selectedOrder) return;
+        await sendOrderEmailViaPHPMailer(selectedOrder.orderId);
+      });
+
       document.getElementById('btn-save-order-status')?.addEventListener('click', async () => {
         if (!selectedOrder) return;
         const newStatus = document.getElementById('modal-status-select')?.value;
+        const sendEmailChecked = document.getElementById('modal-send-email-checkbox')?.checked ?? true;
         const saveBtn = document.getElementById('btn-save-order-status');
 
         saveBtn.disabled = true;
-        saveBtn.textContent = 'Updating...';
+        saveBtn.textContent = 'Updating & Syncing...';
 
         try {
-          const res = await ApiClient.put(`/admin/orders/${selectedOrder.orderId}/status`, { status: newStatus });
+          const res = await ApiClient.put(`/admin/orders/${selectedOrder.orderId}/status`, { 
+            status: newStatus,
+            send_email: sendEmailChecked
+          });
+
           if (res && res.success) {
             selectedOrder.status = newStatus;
-            alert(`Order ${selectedOrder.orderId} updated to ${newStatus}.`);
+            let successMsg = `Order ${selectedOrder.orderId} updated to ${newStatus}.`;
+            if (res.stockAdjusted && res.stockAdjusted.length > 0) {
+              successMsg += ` Stock automatically adjusted in database for ${res.stockAdjusted.length} items.`;
+            }
+            if (sendEmailChecked && res.mailer) {
+              successMsg += ` PHPMailer receipt prepared for ${selectedOrder.customer?.email || 'patron'}.`;
+            }
+
+            if (typeof AdminToast !== 'undefined') {
+              AdminToast.show(successMsg, 'success');
+            } else {
+              alert(successMsg);
+            }
+
             closeModal();
             await fetchOrders();
           } else {
@@ -183,6 +214,41 @@
       });
     }
 
+    async function sendOrderEmailViaPHPMailer(orderId) {
+      const emailBtn = document.getElementById('btn-modal-phpmailer-send');
+      if (emailBtn) {
+        emailBtn.disabled = true;
+        emailBtn.textContent = '📧 Sending via PHPMailer...';
+      }
+
+      try {
+        const res = await ApiClient.post(`/admin/orders/${orderId}/send-email`, {});
+        if (res && res.success) {
+          const target = res.recipientEmail || 'customer';
+          const msg = res.message || `Order receipt successfully sent via PHPMailer to ${target}.`;
+          if (typeof AdminToast !== 'undefined') {
+            AdminToast.show(msg, 'success');
+          } else {
+            alert(msg);
+          }
+        } else {
+          const errMsg = res?.error || 'PHPMailer execution encountered an issue.';
+          if (typeof AdminToast !== 'undefined') {
+            AdminToast.show(errMsg, 'error');
+          } else {
+            alert(errMsg);
+          }
+        }
+      } catch (err) {
+        alert('Error triggering PHPMailer: ' + err.message);
+      } finally {
+        if (emailBtn) {
+          emailBtn.disabled = false;
+          emailBtn.textContent = '📧 Send PHPMailer Receipt';
+        }
+      }
+    }
+
     async function fetchOrders() {
       const tbody = document.getElementById('admin-orders-tbody');
       const countEl = document.getElementById('admin-orders-count');
@@ -191,7 +257,7 @@
         const res = await ApiClient.get(API_CONFIG.ENDPOINTS.ADMIN_ORDERS);
         if (res && res.success) {
           currentOrders = res.orders || [];
-          if (countEl) countEl.textContent = `${currentOrders.length} Orders`;
+          if (countEl) countEl.textContent = `${currentOrders.length} Orders (MySQL Live)`;
           filterAndRender();
         }
       } catch (err) {
@@ -223,8 +289,8 @@
           <tr>
             <td colspan="8" style="padding: 0;">
               <div class="admin-empty-state">
-                <div class="admin-empty-title">No studio orders yet</div>
-                <div class="admin-empty-subtext">Orders will appear here once patrons check out.</div>
+                <div class="admin-empty-title">No orders found</div>
+                <div class="admin-empty-subtext">Orders placed on the website will be fetched directly from the database here.</div>
               </div>
             </td>
           </tr>
@@ -238,18 +304,31 @@
         else if (o.status === 'Shipped') badgeClass = 'admin-badge-warning';
         else if (o.status === 'Cancelled') badgeClass = 'admin-badge-danger';
 
-        const customerName = `${o.customer?.firstName || 'Artist'} ${o.customer?.lastName || ''}`;
+        const customerName = `${o.customer?.firstName || 'Patron'} ${o.customer?.lastName || ''}`.trim();
+        const totalItems = (o.items || []).reduce((sum, it) => sum + (it.quantity || 1), 0);
 
         return `
           <tr>
-            <td class="text-left" style="vertical-align: middle;"><strong style="font-family: monospace;">${o.orderId}</strong></td>
+            <td class="text-left" style="vertical-align: middle;">
+              <strong style="font-family: monospace; font-size: 0.95rem; color: #4A1D5E;">#${o.orderId}</strong>
+              <div style="font-size: 0.72rem; color: var(--admin-text-secondary); margin-top: 2px;">ID: ${o.customer?.id || 'Patron'}</div>
+            </td>
             <td class="text-left" style="vertical-align: middle;">
               <div><strong>${customerName}</strong></div>
-              <div style="font-size: 0.74rem; color: var(--admin-text-secondary);">${o.shippingAddress?.city || 'India'} • ${o.customer?.phone || ''}</div>
+              <div style="font-size: 0.76rem; color: #4338CA;">${o.customer?.email || 'No email registered'}</div>
+              <div style="font-size: 0.72rem; color: var(--admin-text-secondary);">${o.shippingAddress?.city || 'India'} • ${o.customer?.phone || ''}</div>
             </td>
-            <td class="text-center" style="vertical-align: middle;">${new Date(o.orderDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
-            <td class="text-center" style="vertical-align: middle;">${o.items?.length || 0} unique items</td>
-            <td class="text-right" style="vertical-align: middle;"><strong>${AdminCommon.formatINR(o.total)}</strong></td>
+            <td class="text-center" style="vertical-align: middle;">
+              <div style="font-size: 0.85rem; font-weight: 600;">${new Date(o.orderDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+              <div style="font-size: 0.72rem; color: var(--admin-text-secondary);">${new Date(o.orderDate).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</div>
+            </td>
+            <td class="text-center" style="vertical-align: middle;">
+              <div><strong>${totalItems} units</strong></div>
+              <div style="font-size: 0.72rem; color: var(--admin-text-secondary);">${(o.items || []).length} SKUs</div>
+            </td>
+            <td class="text-right" style="vertical-align: middle;">
+              <strong style="font-size: 1rem; color: var(--admin-text);">${AdminCommon.formatINR(o.total)}</strong>
+            </td>
             <td class="text-center" style="vertical-align: middle;">
               <span class="admin-badge admin-badge-success" style="font-size: 0.7rem;">${o.paymentStatus || 'Paid'}</span>
               <div style="font-size: 0.72rem; color: var(--admin-text-secondary); margin-top: 2px;">${o.paymentMethod || 'UPI'}</div>
@@ -258,9 +337,14 @@
               <span class="admin-badge ${badgeClass}">${o.status}</span>
             </td>
             <td class="text-right" style="vertical-align: middle;">
-              <button type="button" class="btn-admin btn-admin-secondary btn-admin-sm" onclick="viewOrderDetails('${o.orderId}')">
-                Update Status
-              </button>
+              <div style="display: flex; gap: 6px; justify-content: flex-end;">
+                <button type="button" class="btn-admin btn-admin-primary btn-admin-sm" onclick="viewOrderDetails('${o.orderId}')" title="Inspect order details and stock impact">
+                  Details & Stock
+                </button>
+                <button type="button" class="btn-admin btn-admin-outline btn-admin-sm" onclick="sendOrderEmailViaPHPMailer('${o.orderId}')" title="Dispatch confirmation receipt via PHPMailer" style="padding: 4px 8px;">
+                  📧 Mail
+                </button>
+              </div>
             </td>
           </tr>
         `;
@@ -275,49 +359,95 @@
       const title = document.getElementById('order-modal-title');
       const content = document.getElementById('order-modal-content');
 
-      title.textContent = `Order ${selectedOrder.orderId} — Atelier Dispatch`;
+      title.textContent = `Order #${selectedOrder.orderId} — Customer Details & Stock Impact`;
 
-      const customerName = `${selectedOrder.customer?.firstName || 'Artist'} ${selectedOrder.customer?.lastName || ''}`;
+      const customerName = `${selectedOrder.customer?.firstName || 'Patron'} ${selectedOrder.customer?.lastName || ''}`.trim();
+      const isCancelled = (selectedOrder.status || '').toLowerCase() === 'cancelled';
 
       content.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 14px; border-bottom: 1px solid var(--admin-border);">
-          <div>
-            <div style="font-size: 0.78rem; color: var(--admin-text-secondary);">Customer Atelier</div>
-            <strong>${customerName}</strong> (${selectedOrder.customer?.email || ''})
-            <div style="font-size: 0.78rem; color: var(--admin-text-secondary);">${selectedOrder.shippingAddress?.address || ''}, ${selectedOrder.shippingAddress?.city || ''} - ${selectedOrder.shippingAddress?.postalCode || ''}</div>
-          </div>
-          <div style="text-align: right;">
-            <div style="font-size: 0.78rem; color: var(--admin-text-secondary);">Total Investment</div>
-            <strong style="font-size: 1.3rem; color: var(--admin-text);">₹${Number(selectedOrder.total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+        <!-- Customer & Order Overview (Direct from Database) -->
+        <div style="background: #FDFBFF; border: 1px solid #E9D5FF; border-radius: 8px; padding: 14px 18px; margin-bottom: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap;">
+            <div>
+              <div style="font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: #6B7280; font-weight: 700;">Patron Details (MySQL)</div>
+              <div style="font-size: 1.05rem; font-weight: 700; color: #4A1D5E; margin-top: 2px;">${customerName}</div>
+              <div style="font-size: 0.85rem; color: #4338CA; margin-top: 2px;">✉ ${selectedOrder.customer?.email || 'N/A'} • 📞 ${selectedOrder.customer?.phone || 'N/A'}</div>
+              <div style="font-size: 0.8rem; color: #4B5563; margin-top: 4px;">📍 ${selectedOrder.shippingAddress?.address || 'Standard Studio Address, India'}</div>
+            </div>
+            <div style="text-align: right;">
+              <div style="font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: #6B7280; font-weight: 700;">Total Amount Paid</div>
+              <strong style="font-size: 1.35rem; color: #4A1D5E; display: block; margin-top: 2px;">₹${Number(selectedOrder.total || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+              <span class="admin-badge admin-badge-success" style="font-size: 0.72rem; margin-top: 4px;">${selectedOrder.paymentStatus || 'Paid'} (${selectedOrder.paymentMethod || 'UPI'})</span>
+            </div>
           </div>
         </div>
 
-        <div class="admin-form-group" style="background: var(--admin-bg); padding: 16px; border-radius: var(--admin-radius-md); border: 1px solid var(--admin-border);">
-          <label class="admin-form-label" for="modal-status-select">Update Fulfillment & Dispatch Status</label>
-          <select id="modal-status-select" class="admin-form-control">
+        <!-- Fulfillment & Status Controls -->
+        <div class="admin-form-group" style="background: var(--admin-bg); padding: 16px; border-radius: var(--admin-radius-md); border: 1px solid var(--admin-border); margin-bottom: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <label class="admin-form-label" for="modal-status-select" style="margin-bottom: 0;">Fulfillment & Dispatch Status</label>
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 0.82rem; color: #4A1D5E; cursor: pointer; margin-bottom: 0;">
+              <input type="checkbox" id="modal-send-email-checkbox" checked style="accent-color: #7C3AED;" />
+              Notify Customer via PHPMailer
+            </label>
+          </div>
+          <select id="modal-status-select" class="admin-form-control" onchange="handleModalStatusChange(this.value)">
             <option value="Confirmed" ${selectedOrder.status === 'Confirmed' ? 'selected' : ''}>Confirmed</option>
             <option value="Processing" ${selectedOrder.status === 'Processing' ? 'selected' : ''}>Processing</option>
             <option value="Shipped" ${selectedOrder.status === 'Shipped' ? 'selected' : ''}>Shipped</option>
             <option value="Delivered" ${selectedOrder.status === 'Delivered' ? 'selected' : ''}>Delivered</option>
-            <option value="Cancelled" ${selectedOrder.status === 'Cancelled' ? 'selected' : ''}>Cancelled</option>
+            <option value="Cancelled" ${selectedOrder.status === 'Cancelled' ? 'selected' : ''}>Cancelled (Restock Materials to DB)</option>
           </select>
+          <div id="modal-stock-cancellation-notice" style="display: ${isCancelled ? 'block' : 'none'}; margin-top: 10px; font-size: 0.78rem; background: #FEF3C7; border: 1px solid #F59E0B; color: #92400E; padding: 8px 12px; border-radius: 6px;">
+            ⚡ <strong>Stock Restoration Active:</strong> Cancelling this order automatically increases warehouse stock in the MySQL database inventory table for all items listed below.
+          </div>
         </div>
 
-        <h4 style="font-size: 0.95rem; margin-bottom: 10px;">Ordered Materials:</h4>
-        <div style="display: flex; flex-direction: column; gap: 8px; max-height: 180px; overflow-y: auto;">
-          ${(selectedOrder.items || []).map(item => `
-            <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: #FFFDF9; border: 1px solid var(--admin-border-light); border-radius: 6px;">
-              <div style="display: flex; align-items: center; gap: 10px;">
-                <img src="${item.image || AdminCommon.PLACEHOLDER_IMAGE}" style="width: 32px; height: 32px; border-radius: 4px; object-fit: cover;" onerror="AdminCommon.handleImgError(this)" />
-                <span style="font-size: 0.85rem; font-weight: 600;">${item.name}</span>
+        <!-- Ordered Materials with Stock Increase/Decrease Details -->
+        <h4 style="font-size: 0.95rem; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+          <span>Purchased Materials & Database Stock Impact:</span>
+          <span style="font-size: 0.78rem; color: var(--admin-text-secondary); font-weight: normal;">Live inventory values from MySQL</span>
+        </h4>
+        <div style="display: flex; flex-direction: column; gap: 10px; max-height: 220px; overflow-y: auto;">
+          ${(selectedOrder.items || []).map(item => {
+            const isItemCancelled = (selectedOrder.status || '').toLowerCase() === 'cancelled';
+            const stockColor = isItemCancelled ? '#059669' : '#DC2626';
+            const stockBg = isItemCancelled ? '#ECFDF5' : '#FEF2F2';
+            const stockIcon = isItemCancelled ? '⚡ Stock Restored:' : '🔻 Stock Deducted:';
+            const qtyChange = isItemCancelled ? `+${item.quantity}` : `-${item.quantity}`;
+
+            return `
+              <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: #FFFFFF; border: 1px solid var(--admin-border-light); border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.03);">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <img src="${item.image || AdminCommon.PLACEHOLDER_IMAGE}" style="width: 44px; height: 44px; border-radius: 6px; object-fit: cover; border: 1px solid var(--admin-border-light);" onerror="AdminCommon.handleImgError(this)" />
+                  <div>
+                    <div style="font-size: 0.88rem; font-weight: 700; color: #1F2937;">${item.name}</div>
+                    <div style="font-size: 0.74rem; color: var(--admin-text-secondary);">SKU: <code style="color: #4A1D5E;">${item.product_id}</code> • Category: ${item.category || item.category_name || 'Fine Art'}</div>
+                    <div style="margin-top: 4px; display: inline-flex; align-items: center; gap: 6px; font-size: 0.72rem; padding: 2px 8px; border-radius: 4px; background: ${stockBg}; color: ${stockColor}; font-weight: 600;">
+                      <span>${stockIcon} <strong>${qtyChange} units</strong></span>
+                      <span>•</span>
+                      <span>Current Warehouse DB Stock: <strong>${item.current_stock ?? 'N/A'}</strong> units</span>
+                    </div>
+                  </div>
+                </div>
+                <div style="text-align: right;">
+                  <div style="font-size: 0.85rem; font-weight: 700; color: #111827;">${item.quantity} × ₹${Number(item.price).toLocaleString('en-IN')}</div>
+                  <div style="font-size: 0.8rem; font-weight: 700; color: #4A1D5E; margin-top: 2px;">Subtotal: ₹${Number(item.subtotal).toLocaleString('en-IN')}</div>
+                </div>
               </div>
-              <span style="font-size: 0.85rem; color: var(--admin-text-secondary);">Qty: ${item.quantity} × ₹${Number(item.price).toLocaleString('en-IN')}</span>
-            </div>
-          `).join('')}
+            `;
+          }).join('')}
         </div>
       `;
 
       modal.classList.add('active');
+    };
+
+    window.handleModalStatusChange = function(status) {
+      const notice = document.getElementById('modal-stock-cancellation-notice');
+      if (notice) {
+        notice.style.display = (status.toLowerCase() === 'cancelled') ? 'block' : 'none';
+      }
     };
 
     function closeModal() {

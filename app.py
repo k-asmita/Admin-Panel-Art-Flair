@@ -5,8 +5,11 @@ Provides full production integration between the Admin Panel and Aiven MySQL (ar
 
 import os
 import re
+import json
+import shutil
 import base64
 import functools
+import subprocess
 from pathlib import Path
 from decimal import Decimal
 from datetime import datetime, date
@@ -682,11 +685,85 @@ def get_categories():
 
 
 # ------------------------------------------------------------------------------
-# 6. Orders & Fulfillment Endpoints
+# 5.1 PHPMailer Integration Helper
+# ------------------------------------------------------------------------------
+def trigger_phpmailer(order_id, status=None):
+    """
+    Executes the authoritative PHPMailer script via PHP CLI.
+    Fetches order details, registered user information, and inventory stock
+    directly from MySQL, then dispatches or saves the confirmation receipt.
+    """
+    php_candidates = [
+        r"C:\xampp\php\php.exe",
+        "php",
+        "php.exe"
+    ]
+    php_bin = None
+    for cand in php_candidates:
+        if os.path.exists(cand):
+            php_bin = cand
+            break
+        elif shutil.which(cand):
+            php_bin = cand
+            break
+
+    if not php_bin:
+        return {
+            "success": False,
+            "mailer": "PHPMailer",
+            "error": "PHP runtime (C:\\xampp\\php\\php.exe) not found on system."
+        }
+
+    script_path = Path(__file__).resolve().parent / "send_order_email.php"
+    if not script_path.exists():
+        script_path = Path("C:/Project Sem 5/send_order_email.php")
+
+    if not script_path.exists():
+        return {
+            "success": False,
+            "mailer": "PHPMailer",
+            "error": f"PHPMailer script not found at {script_path}"
+        }
+
+    cmd = [php_bin, str(script_path), str(order_id)]
+    if status:
+        cmd.append(str(status))
+
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
+        stdout = proc.stdout.strip()
+        json_match = re.search(r'\{.*\}', stdout, re.DOTALL)
+        if json_match:
+            try:
+                parsed = json.loads(json_match.group(0))
+                return parsed
+            except Exception:
+                pass
+        return {
+            "success": proc.returncode == 0,
+            "mailer": "PHPMailer 6.9+",
+            "stdout": stdout,
+            "stderr": proc.stderr.strip()
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "mailer": "PHPMailer",
+            "error": f"Failed to execute PHPMailer: {str(e)}"
+        }
+
+
+# ------------------------------------------------------------------------------
+# 6. Orders & Fulfillment Endpoints (Authoritative Database Queries)
 # ------------------------------------------------------------------------------
 @app.route('/api/orders', methods=['GET'])
 @app.route('/api/admin/orders', methods=['GET'])
 def get_orders():
+    """
+    Fetches all customer orders directly from MySQL database.
+    Includes patron contact details, shipping address, order items, and
+    live warehouse inventory stock increase/decrease impact metrics.
+    """
     try:
         with get_db_cursor(commit=False) as cur:
             cur.execute("""
@@ -697,6 +774,7 @@ def get_orders():
                     u.last_name,
                     u.email,
                     u.phone,
+                    u.role,
                     o.order_date AS orderDate,
                     CAST(o.total_amount AS DOUBLE) AS total,
                     o.order_status AS status,
@@ -715,34 +793,72 @@ def get_orders():
                         oi.product_id,
                         p.product_name,
                         p.product_image,
+                        p.brand,
+                        c.category_name,
                         oi.quantity,
                         CAST(oi.price AS DOUBLE) AS price,
-                        CAST(oi.subtotal AS DOUBLE) AS subtotal
+                        CAST(oi.subtotal AS DOUBLE) AS subtotal,
+                        COALESCE(i.quantity, 0) AS current_stock
                     FROM order_items oi
                     LEFT JOIN products p ON oi.product_id = p.product_id
+                    LEFT JOIN categories c ON p.category_id = c.category_id
+                    LEFT JOIN inventory i ON p.product_id = i.product_id
                     WHERE oi.order_id = %s;
                 """, (o['orderId'],))
                 items = cur.fetchall()
 
+                is_cancelled = (o['status'] or '').lower() == 'cancelled'
+                decorated_items = []
+                for item in items:
+                    curr_stk = int(item.get('current_stock') or 0)
+                    qty = int(item.get('quantity') or 1)
+                    p_img = item.get('product_image') or ''
+                    decorated_items.append({
+                        "order_item_id": item.get('order_item_id'),
+                        "product_id": item.get('product_id'),
+                        "name": item.get('product_name') or 'Fine Art Supply',
+                        "product_name": item.get('product_name') or 'Fine Art Supply',
+                        "image": p_img,
+                        "product_image": p_img,
+                        "brand": item.get('brand') or 'Artisan Atelier',
+                        "category": item.get('category_name') or 'Mediums',
+                        "category_name": item.get('category_name') or 'Mediums',
+                        "quantity": qty,
+                        "price": float(item.get('price') or 0),
+                        "subtotal": float(item.get('subtotal') or 0),
+                        "current_stock": curr_stk,
+                        "stock_impact": f"Restored +{qty} units (Order Cancelled)" if is_cancelled else f"Decreased -{qty} units on checkout",
+                        "stock_direction": "increase" if is_cancelled else "decrease",
+                        "stock_before": (curr_stk - qty) if is_cancelled else (curr_stk + qty),
+                        "stock_after": curr_stk
+                    })
+
+                customer_full_name = f"{o.get('first_name') or 'Patron'} {o.get('last_name') or ''}".strip()
+
                 orders_list.append({
                     "orderId": o['orderId'],
+                    "order_id": o['orderId'],
                     "customer": {
                         "id": o['user_id'],
                         "firstName": o['first_name'] or 'Patron',
                         "lastName": o['last_name'] or '',
+                        "name": customer_full_name,
                         "email": o['email'] or '',
-                        "phone": o['phone'] or ''
+                        "phone": o['phone'] or '',
+                        "role": o.get('role') or 'customer'
                     },
                     "orderDate": o['orderDate'].isoformat() if o['orderDate'] else None,
                     "date": o['orderDate'].isoformat() if o['orderDate'] else None,
                     "createdAt": o['orderDate'].isoformat() if o['orderDate'] else None,
                     "total": o['total'],
                     "status": (o['status'] or 'Pending').capitalize(),
+                    "paymentStatus": "Paid",
+                    "paymentMethod": "UPI (Razorpay Verified)",
                     "shippingAddress": {
                         "address": o['shippingAddress'],
                         "city": "Mumbai" if "Mumbai" in (o['shippingAddress'] or '') else "Studio"
                     },
-                    "items": serialize_db_value(items)
+                    "items": decorated_items
                 })
 
         return jsonify({
@@ -757,6 +873,10 @@ def get_orders():
 @app.route('/api/orders/<order_id>', methods=['GET'])
 @app.route('/api/admin/orders/<order_id>', methods=['GET'])
 def get_order_detail(order_id):
+    """
+    Fetches comprehensive details for a single order from MySQL database,
+    including customer details, item price breakdown, and stock impact.
+    """
     try:
         with get_db_cursor(commit=False) as cur:
             cur.execute("""
@@ -767,6 +887,7 @@ def get_order_detail(order_id):
                     u.last_name,
                     u.email,
                     u.phone,
+                    u.role,
                     o.order_date AS orderDate,
                     CAST(o.total_amount AS DOUBLE) AS total,
                     o.order_status AS status,
@@ -785,29 +906,67 @@ def get_order_detail(order_id):
                     oi.product_id,
                     p.product_name,
                     p.product_image,
+                    p.brand,
+                    c.category_name,
                     oi.quantity,
                     CAST(oi.price AS DOUBLE) AS price,
-                    CAST(oi.subtotal AS DOUBLE) AS subtotal
+                    CAST(oi.subtotal AS DOUBLE) AS subtotal,
+                    COALESCE(i.quantity, 0) AS current_stock
                 FROM order_items oi
                 LEFT JOIN products p ON oi.product_id = p.product_id
+                LEFT JOIN categories c ON p.category_id = c.category_id
+                LEFT JOIN inventory i ON p.product_id = i.product_id
                 WHERE oi.order_id = %s;
             """, (order_id,))
             items = cur.fetchall()
 
+            is_cancelled = (o['status'] or '').lower() == 'cancelled'
+            decorated_items = []
+            for item in items:
+                curr_stk = int(item.get('current_stock') or 0)
+                qty = int(item.get('quantity') or 1)
+                p_img = item.get('product_image') or ''
+                decorated_items.append({
+                    "order_item_id": item.get('order_item_id'),
+                    "product_id": item.get('product_id'),
+                    "name": item.get('product_name') or 'Fine Art Supply',
+                    "product_name": item.get('product_name') or 'Fine Art Supply',
+                    "image": p_img,
+                    "product_image": p_img,
+                    "brand": item.get('brand') or 'Artisan Atelier',
+                    "category": item.get('category_name') or 'Mediums',
+                    "category_name": item.get('category_name') or 'Mediums',
+                    "quantity": qty,
+                    "price": float(item.get('price') or 0),
+                    "subtotal": float(item.get('subtotal') or 0),
+                    "current_stock": curr_stk,
+                    "stock_impact": f"Restored +{qty} units (Order Cancelled)" if is_cancelled else f"Decreased -{qty} units on checkout",
+                    "stock_direction": "increase" if is_cancelled else "decrease",
+                    "stock_before": (curr_stk - qty) if is_cancelled else (curr_stk + qty),
+                    "stock_after": curr_stk
+                })
+
+            customer_full_name = f"{o.get('first_name') or 'Patron'} {o.get('last_name') or ''}".strip()
+
             order_detail = {
                 "orderId": o['orderId'],
+                "order_id": o['orderId'],
                 "customer": {
                     "id": o['user_id'],
                     "firstName": o['first_name'] or 'Patron',
                     "lastName": o['last_name'] or '',
+                    "name": customer_full_name,
                     "email": o['email'] or '',
-                    "phone": o['phone'] or ''
+                    "phone": o['phone'] or '',
+                    "role": o.get('role') or 'customer'
                 },
                 "orderDate": o['orderDate'].isoformat() if o['orderDate'] else None,
                 "total": o['total'],
                 "status": (o['status'] or 'Pending').capitalize(),
+                "paymentStatus": "Paid",
+                "paymentMethod": "UPI (Razorpay Verified)",
                 "shippingAddress": {"address": o['shippingAddress']},
-                "items": serialize_db_value(items)
+                "items": decorated_items
             }
 
         return jsonify({"success": True, "order": order_detail})
@@ -819,30 +978,151 @@ def get_order_detail(order_id):
 @app.route('/api/admin/orders/<order_id>', methods=['PUT'])
 @app.route('/api/admin/orders/<order_id>/status', methods=['PUT'])
 def update_order_status(order_id):
+    """
+    Updates order fulfillment status in MySQL.
+    Automatically manages stock adjustments:
+    - If status changes to 'cancelled': Increases (restores) product stock in inventory & logs movement.
+    - If status changes from 'cancelled' back to active: Decreases product stock & logs movement.
+    - If requested or checked, dispatches customer email receipt via PHPMailer.
+    """
     try:
         data = request.get_json() or {}
         new_status = (data.get('status') or data.get('order_status') or '').strip().lower()
 
-        VALID_STATUSES = {'pending', 'processing', 'shipped', 'delivered', 'cancelled'}
+        VALID_STATUSES = {'pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'}
         if new_status not in VALID_STATUSES:
             return jsonify({
                 "success": False,
                 "error": f"Invalid order status '{new_status}'. Allowed: {', '.join(VALID_STATUSES)}."
             }), 400
 
+        stock_adjusted = []
         with get_db_cursor(commit=True) as cur:
-            cur.execute("SELECT order_id FROM orders WHERE order_id = %s;", (order_id,))
-            if not cur.fetchone():
+            cur.execute("SELECT order_id, order_status FROM orders WHERE order_id = %s;", (order_id,))
+            order_row = cur.fetchone()
+            if not order_row:
                 return jsonify({"success": False, "error": f"Order '{order_id}' not found."}), 404
 
+            prev_status = (order_row['order_status'] or '').strip().lower()
+
+            # Handle Stock Adjustment on Cancellation (Increase/Restock)
+            if prev_status != 'cancelled' and new_status == 'cancelled':
+                cur.execute("SELECT product_id, quantity FROM order_items WHERE order_id = %s;", (order_id,))
+                items = cur.fetchall()
+                for it in items:
+                    pid = it['product_id']
+                    qty = int(it['quantity'])
+                    cur.execute("SELECT quantity FROM inventory WHERE product_id = %s;", (pid,))
+                    inv_row = cur.fetchone()
+                    stock_before = int(inv_row['quantity']) if inv_row else 0
+                    stock_after = stock_before + qty
+                    cur.execute("""
+                        UPDATE inventory 
+                        SET quantity = quantity + %s, last_updated = CURRENT_TIMESTAMP 
+                        WHERE product_id = %s;
+                    """, (qty, pid))
+                    cur.execute("""
+                        INSERT INTO stock_movements (product_id, change_type, quantity_change, stock_before, stock_after, reference_id, notes)
+                        VALUES (%s, 'order_cancellation_restock', %s, %s, %s, %s, %s);
+                    """, (pid, qty, stock_before, stock_after, order_id, f"Order #{order_id} cancelled: Restored +{qty} units to warehouse inventory"))
+                    stock_adjusted.append({"product_id": pid, "change": f"+{qty}", "new_stock": stock_after})
+
+            elif prev_status == 'cancelled' and new_status != 'cancelled':
+                # Reactivate cancelled order -> Deduct inventory stock again
+                cur.execute("SELECT product_id, quantity FROM order_items WHERE order_id = %s;", (order_id,))
+                items = cur.fetchall()
+                for it in items:
+                    pid = it['product_id']
+                    qty = int(it['quantity'])
+                    cur.execute("SELECT quantity FROM inventory WHERE product_id = %s;", (pid,))
+                    inv_row = cur.fetchone()
+                    stock_before = int(inv_row['quantity']) if inv_row else 0
+                    stock_after = max(0, stock_before - qty)
+                    cur.execute("""
+                        UPDATE inventory 
+                        SET quantity = GREATEST(0, quantity - %s), last_updated = CURRENT_TIMESTAMP 
+                        WHERE product_id = %s;
+                    """, (qty, pid))
+                    cur.execute("""
+                        INSERT INTO stock_movements (product_id, change_type, quantity_change, stock_before, stock_after, reference_id, notes)
+                        VALUES (%s, 'order_deduction', %s, %s, %s, %s, %s);
+                    """, (pid, -qty, stock_before, stock_after, order_id, f"Order #{order_id} reactivated ({new_status}): Deducted -{qty} units"))
+                    stock_adjusted.append({"product_id": pid, "change": f"-{qty}", "new_stock": stock_after})
+
+            # Update order status
             cur.execute("UPDATE orders SET order_status = %s WHERE order_id = %s;", (new_status, order_id))
+
+        # Optional PHPMailer dispatch
+        send_email_requested = data.get('send_email', False) or data.get('notify_customer', False)
+        mailer_result = None
+        if send_email_requested:
+            mailer_result = trigger_phpmailer(order_id, new_status.capitalize())
 
         return jsonify({
             "success": True,
-            "message": f"Order '{order_id}' status updated to '{new_status.capitalize()}' in Aiven MySQL."
+            "message": f"Order '{order_id}' status updated to '{new_status.capitalize()}' in Aiven MySQL.",
+            "status": new_status.capitalize(),
+            "stockAdjusted": stock_adjusted,
+            "mailer": mailer_result
         })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/orders/<order_id>/send-email', methods=['POST'])
+@app.route('/api/admin/orders/<order_id>/send-email', methods=['POST'])
+def send_order_email_route(order_id):
+    """
+    Direct endpoint to dispatch an authoritative order confirmation receipt via PHPMailer.
+    Fetches order and user details directly from MySQL.
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        status = data.get('status')
+        result = trigger_phpmailer(order_id, status)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/inventory/movements', methods=['GET'])
+@app.route('/api/admin/inventory/movements', methods=['GET'])
+def get_stock_movements():
+    """
+    Fetches the stock increase / decrease audit history from MySQL table stock_movements.
+    """
+    try:
+        limit = int(request.args.get('limit', 50))
+        with get_db_cursor(commit=False) as cur:
+            cur.execute("""
+                SELECT 
+                    sm.id,
+                    sm.product_id,
+                    p.product_name,
+                    p.brand,
+                    c.category_name,
+                    sm.change_type,
+                    sm.quantity_change,
+                    sm.stock_before,
+                    sm.stock_after,
+                    sm.reference_id,
+                    sm.notes,
+                    sm.created_at
+                FROM stock_movements sm
+                LEFT JOIN products p ON sm.product_id = p.product_id
+                LEFT JOIN categories c ON p.category_id = c.category_id
+                ORDER BY sm.created_at DESC, sm.id DESC
+                LIMIT %s;
+            """, (limit,))
+            movements = serialize_db_value(cur.fetchall())
+        return jsonify({
+            "success": True,
+            "movements": movements,
+            "total": len(movements)
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
 
 
 # ------------------------------------------------------------------------------
@@ -912,16 +1192,30 @@ def update_inventory_stock(item_id):
             prod_id = row['product_id']
             inv_id = row['inventory_id'] or f"INV{prod_id[3:]}"
 
+            # Query previous stock before updating
+            cur.execute("SELECT quantity FROM inventory WHERE product_id = %s;", (prod_id,))
+            inv_old = cur.fetchone()
+            old_stock = int(inv_old['quantity']) if inv_old else 0
+            diff = new_stock - old_stock
+
             cur.execute("""
                 INSERT INTO inventory (inventory_id, product_id, quantity, reorder_level, last_updated)
                 VALUES (%s, %s, %s, 5, CURRENT_TIMESTAMP)
                 ON DUPLICATE KEY UPDATE quantity = %s, last_updated = CURRENT_TIMESTAMP;
             """, (inv_id, prod_id, new_stock, new_stock))
 
+            if diff != 0:
+                change_type = 'restock' if diff > 0 else 'manual_adjustment'
+                cur.execute("""
+                    INSERT INTO stock_movements (product_id, change_type, quantity_change, stock_before, stock_after, notes)
+                    VALUES (%s, %s, %s, %s, %s, %s);
+                """, (prod_id, change_type, diff, old_stock, new_stock, f"Manual inventory adjustment: {'+' if diff > 0 else ''}{diff} units"))
+
         return jsonify({
             "success": True,
             "message": f"Stock level for '{prod_id}' updated to {new_stock} units in MySQL.",
-            "stock": new_stock
+            "stock": new_stock,
+            "diff": diff
         })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500

@@ -175,3 +175,21 @@ CREATE TABLE IF NOT EXISTS `user_interactions` (
   CONSTRAINT `fk_interactions_product` FOREIGN KEY (`product_id`)
     REFERENCES `products` (`id`) ON UPDATE CASCADE ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ------------------------------------------------------------------------------
+-- 9. Table: Stock Movements (Audit Trail for Stock Increase / Decrease)
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `stock_movements` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `product_id` VARCHAR(64) NOT NULL,
+  `change_type` ENUM('order_deduction', 'order_cancellation_restock', 'manual_adjustment', 'restock') NOT NULL,
+  `quantity_change` INT NOT NULL,
+  `stock_before` INT NOT NULL,
+  `stock_after` INT NOT NULL,
+  `reference_id` VARCHAR(64) NULL,
+  `notes` TEXT NULL,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX `idx_sm_product` (`product_id`),
+  INDEX `idx_sm_reference` (`reference_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+

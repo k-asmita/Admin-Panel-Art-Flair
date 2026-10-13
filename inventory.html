@@ -18,7 +18,10 @@
       <div class="admin-header-left">
         <h1 class="admin-page-title">Inventory & Stock</h1>
       </div>
-      <div class="admin-header-right">
+      <div class="admin-header-right" style="display: flex; gap: 8px;">
+        <button type="button" class="btn-admin btn-admin-outline" id="btn-view-movements" style="border-color: #7C3AED; color: #7C3AED;">
+          📊 Stock Movements Audit Log
+        </button>
         <button type="button" class="btn-admin btn-admin-secondary" id="btn-refresh-inventory">
           Refresh Stock Levels
         </button>
@@ -224,22 +227,27 @@
               </span>
             </td>
             <td>
-              <div style="display: flex; align-items: center; gap: 8px;">
+              <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
+                <button type="button" class="btn-admin btn-admin-secondary btn-admin-sm" onclick="quickAdjustStock('${item.id}', -5)" title="Decrease stock by 5" style="padding: 2px 6px; font-size: 0.72rem;">-5</button>
+                <button type="button" class="btn-admin btn-admin-secondary btn-admin-sm" onclick="quickAdjustStock('${item.id}', -1)" title="Decrease stock by 1" style="padding: 2px 6px; font-size: 0.72rem;">-1</button>
                 <input 
                   type="number" 
                   min="0" 
                   id="input-stock-${item.id}" 
                   class="admin-form-control" 
-                  style="width: 80px; padding: 4px 8px; text-align: center;" 
+                  style="width: 65px; padding: 4px 6px; text-align: center; font-weight: 700;" 
                   value="${item.stock}" 
                 />
+                <button type="button" class="btn-admin btn-admin-secondary btn-admin-sm" onclick="quickAdjustStock('${item.id}', 1)" title="Increase stock by 1" style="padding: 2px 6px; font-size: 0.72rem;">+1</button>
+                <button type="button" class="btn-admin btn-admin-secondary btn-admin-sm" onclick="quickAdjustStock('${item.id}', 5)" title="Increase stock by 5" style="padding: 2px 6px; font-size: 0.72rem;">+5</button>
                 <button 
                   type="button" 
                   class="btn-admin btn-admin-primary btn-admin-sm"
                   onclick="updateStock('${item.id}')"
                   id="btn-update-${item.id}"
+                  style="margin-left: 4px;"
                 >
-                  Save Stock
+                  Save
                 </button>
               </div>
             </td>
@@ -247,6 +255,14 @@
         `;
       }).join('');
     }
+
+    window.quickAdjustStock = function(id, delta) {
+      const input = document.getElementById(`input-stock-${id}`);
+      if (!input) return;
+      const current = parseInt(input.value, 10) || 0;
+      const next = Math.max(0, current + delta);
+      input.value = next;
+    };
 
     window.updateStock = async function(id) {
       const input = document.getElementById(`input-stock-${id}`);
@@ -272,7 +288,11 @@
           }
           updateSummaryMetrics();
           renderTable();
-          alert(`Stock updated to ${newStock} units in database.`);
+          if (typeof AdminToast !== 'undefined') {
+            AdminToast.show(`Stock for SKU ${id} updated to ${newStock} units (Audit logged in database).`, 'success');
+          } else {
+            alert(`Stock updated to ${newStock} units in database.`);
+          }
         } else {
           alert(res?.error || res?.message || 'Failed to update stock');
         }
@@ -280,9 +300,119 @@
         alert('Error updating stock: ' + err.message);
       } finally {
         btn.disabled = false;
-        btn.textContent = 'Save Stock';
+        btn.textContent = 'Save';
       }
     };
+
+    // Stock Movements Audit Modal Handling
+    document.getElementById('btn-view-movements')?.addEventListener('click', openMovementsModal);
+    document.getElementById('btn-close-movements-modal')?.addEventListener('click', closeMovementsModal);
+    document.getElementById('btn-dismiss-movements-modal')?.addEventListener('click', closeMovementsModal);
+
+    async function openMovementsModal() {
+      const modal = document.getElementById('movements-modal-backdrop');
+      const tbody = document.getElementById('movements-modal-tbody');
+      if (!modal || !tbody) return;
+
+      modal.classList.add('active');
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 24px;">Loading stock audit records from MySQL database...</td></tr>`;
+
+      try {
+        const res = await ApiClient.get('/admin/inventory/movements');
+        if (res && res.success && res.movements && res.movements.length > 0) {
+          tbody.innerHTML = res.movements.map(m => {
+            const isIncrease = m.quantity_change > 0;
+            const badgeBg = isIncrease ? '#ECFDF5' : '#FEF2F2';
+            const badgeColor = isIncrease ? '#059669' : '#DC2626';
+            const sign = isIncrease ? '+' : '';
+
+            let typeLabel = m.change_type;
+            if (m.change_type === 'order_deduction') typeLabel = '🔻 Order Checkout';
+            else if (m.change_type === 'order_cancellation_restock') typeLabel = '⚡ Cancellation Restock';
+            else if (m.change_type === 'restock') typeLabel = '📦 Warehouse Restock';
+            else if (m.change_type === 'manual_adjustment') typeLabel = '✏️ Manual Adjustment';
+
+            const dateStr = m.created_at ? new Date(m.created_at).toLocaleString('en-IN', {
+              day: 'numeric',
+              month: 'short',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit'
+            }) : 'Recently';
+
+            return `
+              <tr>
+                <td style="font-family: monospace; font-size: 0.8rem; vertical-align: middle;">
+                  <strong>${m.product_id}</strong><br/>
+                  <span style="font-size: 0.75rem; color: #4B5563;">${m.product_name || 'Supply'}</span>
+                </td>
+                <td style="vertical-align: middle; font-size: 0.8rem; font-weight: 600;">${typeLabel}</td>
+                <td style="text-align: center; vertical-align: middle;">
+                  <span style="background: ${badgeBg}; color: ${badgeColor}; padding: 3px 8px; border-radius: 4px; font-weight: 700; font-size: 0.85rem;">
+                    ${sign}${m.quantity_change} units
+                  </span>
+                </td>
+                <td style="text-align: center; vertical-align: middle; font-size: 0.8rem;">
+                  ${m.stock_before} ➔ <strong>${m.stock_after}</strong>
+                </td>
+                <td style="vertical-align: middle; font-size: 0.78rem; color: #4B5563;">
+                  ${m.reference_id ? `<code style="color: #4A1D5E;">#${m.reference_id}</code>` : '-'}
+                  <div style="font-size: 0.72rem; color: var(--admin-text-secondary);">${m.notes || ''}</div>
+                </td>
+                <td style="text-align: right; vertical-align: middle; font-size: 0.75rem; color: var(--admin-text-secondary);">
+                  ${dateStr}
+                </td>
+              </tr>
+            `;
+          }).join('');
+        } else {
+          tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 24px; color: var(--admin-text-secondary);">No stock movement records yet. Stock movements from orders, cancellations, and restocks will be recorded in MySQL.</td></tr>`;
+        }
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 24px; color: var(--admin-red);">Failed to load movements: ${err.message}</td></tr>`;
+      }
+    }
+
+    function closeMovementsModal() {
+      document.getElementById('movements-modal-backdrop')?.classList.remove('active');
+    }
   </script>
+
+  <!-- Stock Movements Audit Modal -->
+  <div class="admin-modal-backdrop" id="movements-modal-backdrop">
+    <div class="admin-modal" style="max-width: 820px;">
+      <div class="admin-modal-header">
+        <h3 class="admin-modal-title">📊 Live Stock Movements Audit Log (MySQL)</h3>
+        <button type="button" class="btn-admin btn-admin-secondary btn-admin-sm" id="btn-close-movements-modal">✕</button>
+      </div>
+      <div class="admin-modal-body" style="padding: 0;">
+        <div style="padding: 12px 20px; background: #FAF5FF; border-bottom: 1px solid #E9D5FF; font-size: 0.82rem; color: #4A1D5E;">
+          Tracks all real-time inventory deductions (order checkouts), additions (cancellations/returns), and manual warehouse restocks in the MySQL database.
+        </div>
+        <div class="admin-table-container" style="max-height: 380px; overflow-y: auto;">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Product SKU</th>
+                <th>Movement Type</th>
+                <th style="text-align: center;">Stock Impact</th>
+                <th style="text-align: center;">Before ➔ After</th>
+                <th>Reference / Notes</th>
+                <th style="text-align: right;">Timestamp</th>
+              </tr>
+            </thead>
+            <tbody id="movements-modal-tbody">
+              <tr>
+                <td colspan="6" style="text-align: center; padding: 24px;">Loading stock movements...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="admin-modal-footer">
+        <button type="button" class="btn-admin btn-admin-secondary" id="btn-dismiss-movements-modal">Close Audit Log</button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>
