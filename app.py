@@ -1085,6 +1085,162 @@ def send_order_email_route(order_id):
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@app.route('/api/orders/checkout', methods=['POST'])
+@app.route('/api/checkout', methods=['POST'])
+def checkout_order():
+    """
+    Direct checkout handler:
+    1. Validates customer and materials payload.
+    2. Inserts customer into MySQL users table if not already registered.
+    3. Verifies stock and decreases it in MySQL inventory table.
+    4. Inserts new record into MySQL orders table.
+    5. Inserts items into MySQL order_items table.
+    6. Logs inventory decrease to stock_movements table.
+    7. Triggers PHPMailer to send authoritative receipt.
+    """
+    try:
+        data = request.get_json() or {}
+        customer = data.get('customer') or {}
+        shipping = data.get('shippingAddress') or {}
+        items = data.get('items') or []
+
+        if not items:
+            return jsonify({"success": False, "error": "No materials in checkout payload."}), 400
+
+        email = (customer.get('email') or '').strip().lower()
+        if not email:
+            return jsonify({"success": False, "error": "Customer email is required for order receipt."}), 400
+
+        first_name = (customer.get('firstName') or 'Art').strip()
+        last_name = (customer.get('lastName') or 'Patron').strip()
+        phone = (customer.get('phone') or '').strip()
+
+        # Build shipping address text
+        address_text = data.get('shipping_address')
+        if not address_text:
+            parts = [
+                shipping.get('address', ''),
+                shipping.get('city', ''),
+                shipping.get('state', ''),
+                shipping.get('postalCode', ''),
+                shipping.get('country', 'India')
+            ]
+            address_text = ", ".join([p for p in parts if p]).strip()
+        if not address_text:
+            address_text = "Standard Atelier Studio Address, India"
+
+        payment_method = data.get('paymentMethod') or 'UPI (Razorpay Verified)'
+
+        with get_db_cursor(commit=True) as cur:
+            # 1. Resolve or create user in MySQL users table
+            cur.execute("SELECT user_id FROM users WHERE LOWER(email) = %s;", (email,))
+            u_row = cur.fetchone()
+            if u_row:
+                user_id = u_row['user_id']
+            else:
+                user_id = f"USR{os.urandom(3).hex().upper()}"
+                cur.execute("""
+                    INSERT INTO users (user_id, first_name, last_name, email, phone, role)
+                    VALUES (%s, %s, %s, %s, %s, 'customer');
+                """, (user_id, first_name, last_name, email, phone))
+
+            # 2. Generate unique order ID
+            order_id = f"ORD{os.urandom(3).hex().upper()}"
+            now_dt = datetime.now()
+
+            # 3. Validate items & stock
+            subtotal = 0.0
+            order_items_to_insert = []
+            for it in items:
+                pid = it.get('productId') or it.get('product_id') or it.get('id')
+                qty = max(1, int(it.get('quantity', 1)))
+
+                cur.execute("""
+                    SELECT p.product_id, p.product_name, p.price, COALESCE(i.quantity, 0) as stock
+                    FROM products p
+                    LEFT JOIN inventory i ON p.product_id = i.product_id
+                    WHERE p.product_id = %s;
+                """, (pid,))
+                prod = cur.fetchone()
+                if not prod:
+                    return jsonify({"success": False, "error": f"Product '{pid}' not found in catalog."}), 404
+
+                available_stock = int(prod['stock'])
+                if available_stock < qty:
+                    return jsonify({"success": False, "error": f"Insufficient stock for '{prod['product_name']}'. Only {available_stock} available."}), 400
+
+                unit_price = float(prod['price'])
+                item_subtotal = round(unit_price * qty, 2)
+                subtotal += item_subtotal
+
+                item_id = f"ORI{os.urandom(3).hex().upper()}"
+                order_items_to_insert.append({
+                    "item_id": item_id,
+                    "product_id": pid,
+                    "product_name": prod['product_name'],
+                    "quantity": qty,
+                    "price": unit_price,
+                    "subtotal": item_subtotal,
+                    "stock_before": available_stock
+                })
+
+            # Calculate shipping and grand total
+            discount = float(data.get('clientDiscount', 0) or 0)
+            checkout_amount = max(0.0, subtotal - discount)
+            shipping_fee = round(checkout_amount * 0.005, 2) if checkout_amount > 1000 else 0.0
+            grand_total = round(checkout_amount + shipping_fee, 2)
+
+            # 4. Insert into orders table
+            cur.execute("""
+                INSERT INTO orders (order_id, user_id, order_date, total_amount, order_status, shipping_address)
+                VALUES (%s, %s, %s, %s, 'pending', %s);
+            """, (order_id, user_id, now_dt, grand_total, address_text))
+
+            # 5. Insert order_items, decrease inventory, and record stock movements
+            for oi in order_items_to_insert:
+                cur.execute("""
+                    INSERT INTO order_items (order_item_id, order_id, product_id, quantity, price, subtotal)
+                    VALUES (%s, %s, %s, %s, %s, %s);
+                """, (oi['item_id'], order_id, oi['product_id'], oi['quantity'], oi['price'], oi['subtotal']))
+
+                # Decrease inventory
+                cur.execute("""
+                    UPDATE inventory 
+                    SET quantity = GREATEST(0, quantity - %s), last_updated = CURRENT_TIMESTAMP
+                    WHERE product_id = %s;
+                """, (oi['quantity'], oi['product_id']))
+
+                # Log stock movement
+                stock_after = max(0, oi['stock_before'] - oi['quantity'])
+                cur.execute("""
+                    INSERT INTO stock_movements (product_id, change_type, quantity_change, stock_before, stock_after, reference_id, notes)
+                    VALUES (%s, 'order_deduction', %s, %s, %s, %s, %s);
+                """, (oi['product_id'], -oi['quantity'], oi['stock_before'], stock_after, order_id, f"Order #{order_id} placed by {email}"))
+
+            # 6. Clear user cart if exists
+            cur.execute("DELETE FROM cart WHERE user_id = %s;", (user_id,))
+
+        # 7. Trigger PHPMailer confirmation email
+        mailer_result = trigger_phpmailer(order_id, 'Confirmed')
+
+        return jsonify({
+            "success": True,
+            "orderId": order_id,
+            "order_id": order_id,
+            "orderReference": order_id,
+            "total": grand_total,
+            "total_amount": grand_total,
+            "registeredEmail": email,
+            "orderDate": now_dt.isoformat(),
+            "status": "Confirmed",
+            "message": "Order verified and saved to database orders table.",
+            "mailer": mailer_result
+        }), 201
+
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Checkout failed: {str(e)}"}), 500
+
+
 @app.route('/api/inventory/movements', methods=['GET'])
 @app.route('/api/admin/inventory/movements', methods=['GET'])
 def get_stock_movements():
